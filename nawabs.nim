@@ -10,19 +10,25 @@ import system except TResult
 import strutils except toLower
 from unicode import toLower
 import os, json, sets, parseopt
-import callnim
+import recipes, callnim
 
 const
   Help = """
 Usage: nawabs COMMAND [opts]
 
 Commands:
+  init                            Initializes the current working directory as
+                                  the workspace.
   refresh                         Refreshes the package list.
   search       [pkg/tag]          Searches for a specified package. Search is
                                   performed by tag and by name. If no argument
                                   is given, lists all packages.
   clone        pkgname            Clones a package.
-  c|cpp|js|..  pkgname            Builds a package with nim.
+  c|cpp|js|..  pkgname            Builds a package with nim. Uses the recipe
+                                  if available, else it 'tinkers'.
+  tinker c|..  pkgname            Tinker to build the package, ignore the recipe.
+  update       pkgname            Updates a package and all of its dependencies.
+  pinned       pkgname            Uses the recipe to get a reproducible build.
 
 Options:
   -h, --help                      Print this help message.
@@ -30,6 +36,8 @@ Options:
   --nimExe:nim.exe                Which nim to use for building.
   --cloneUsingHttps               Use the https URL instead of git URLs for
                                   cloning.
+  --workspace:DIR                 Use DIR as the current workspace.
+  --norecipes                     Do not use the recipes mechanism.
 """
   Version = "1.0"
 
@@ -46,12 +54,6 @@ type
     version*: string
     dvcsTag*: string
     web*: string # Info url for humans.
-
-proc error(msg: string) = quit "[Error] " & msg
-
-proc exec(cmd: string) =
-  if execShellCmd(cmd) != 0:
-    error "exernal program failed: " & cmd
 
 proc optionalField(obj: JsonNode, name: string, default = ""): string =
   if hasKey(obj, name):
@@ -96,14 +98,15 @@ var
   nimExe = "nim"
 
 proc refresh() =
-  let roots = getAppDir() / "config" / "roots.nims"
-  exec nimExe & " e " & roots
+  withDir recipesDirName:
+    let roots = "config" / "roots.nims"
+    exec nimExe & " e " & roots
 
 proc getPackages(): seq[Package] =
   result = @[]
   var namesAdded = initSet[string]()
   var jsonFiles = 0
-  for kind, path in walkDir(getCurrentDir()):
+  for kind, path in walkDir(recipesDirName):
     if kind == pcFile and path.endsWith(".json"):
       inc jsonFiles
       let packages = parseFile(path)
@@ -221,9 +224,10 @@ proc tinker(nimExe, cmd: string; args: seq[string]) =
     case todo.k
     of Success:
       echo "Build Successful."
+      writeRecipe(args[0], toNimCommand(nimExe, cmd, args, path), path)
       quit 0
     of Failure:
-      error "Hard failure. Don't know how to proceed."
+      error "Hard failure. Don't know how to proceed.\n" & todo.file
     of FileMissing:
       let terms = todo.file.changeFileExt("").split({'\\','/'})
       let c = selectCandidate determineCandidates(pkgList, terms)
@@ -236,8 +240,18 @@ proc tinker(nimExe, cmd: string; args: seq[string]) =
           cloneUrl(c.url)
         path.add c.name
 
+proc execRecipe(package, cmd: string; attempt = false): bool {.discardable.} =
+  let recipe = toRecipe(package)
+  if not fileExists recipe:
+    if not attempt:
+      error "no recipe found: " & recipe
+  else:
+    exec nimExe & " e " & recipe & " " & cmd
+    result = true
+
 proc main() =
   var action = ""
+  var cwd, lastDir = ""
   var args: seq[string] = @[]
   for kind, key, val in getOpt():
     case kind
@@ -255,21 +269,59 @@ proc main() =
         else: nimExe = val
       of "cloneusinghttps":
         cloneUsingHttps = true
+      of "workspace":
+        if val.len == 0: error "--" & key & " takes a value"
+        else: cwd = val
       else:
         error "unkown command line option: " & key
     of cmdEnd: discard "cannot happen"
-  case action.normalize
-  of "refresh": refresh()
-  of "search", "list": search args
-  of "clone":
-    if args.len == 1:
-      clone args[0]
-    else:
-      error "clone command takes a single package name"
-  elif args.len > 0:
-    tinker(nimExe, action, args)
+  if cwd.len > 0:
+    if not dirExists(cwd / recipesDirName):
+      error cwd & "is not a workspace"
   else:
-    error "compile command takes a package name"
+    cwd = getCurrentDir()
+    if action.normalize != "init":
+      while cwd.len > 0 and not dirExists(cwd / recipesDirName):
+        cwd = cwd.parentDir()
+      if cwd.len == 0:
+        error "Could not detect a workspace. " &
+              "Use 'nawabs init' to create a new workspace."
+  lastDir = getCurrentDir()
+  setCurrentDir(cwd)
+  try:
+    case action.normalize
+    of "init":
+      if dirExists(cwd / recipesDirName):
+        error cwd & " is already a workspace"
+      recipes.init()
+      withDir cwd / recipesDirName:
+        createDir "config"
+        let roots = "config" / "roots.nims"
+        copyFile(getAppDir() / roots, roots)
+        exec nimExe & " e " & roots
+    of "refresh": refresh()
+    of "search", "list": search args
+    of "clone":
+      if args.len == 1:
+        clone args[0]
+      else:
+        error "clone command takes a single package name"
+    of "help", "h":
+      echo Help
+    of "update", "pinned":
+      if args.len == 1:
+        execRecipe args[0], action.normalize
+      else:
+        error action & "command takes a single package name"
+    of "tinker":
+      tinker(nimExe, args[0], args[1..^1])
+    elif args.len > 0:
+      if not execRecipe(args[0], "", attempt=true):
+        tinker(nimExe, action, args)
+    else:
+      error "compile command takes a package name"
+  finally:
+    if lastDir.len > 0: setCurrentDir(lastDir)
 
 when isMainModule:
   main()

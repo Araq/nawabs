@@ -35,14 +35,17 @@ type
     k*: ActionKind
     file*: string
 
-proc callCompiler*(nimExe, cmd: string, args, path: seq[string]): Action =
-  var tmp = nimExe & " " & cmd & " --noNimblePath"
+proc toNimCommand*(nimExe, cmd: string, args, path: seq[string]): string =
+  result = nimExe & " " & cmd & " --noNimblePath"
   for p in path:
-    tmp.add(" -p:")
-    tmp.add(p.quoteShell)
+    result.add(" -p:")
+    result.add(p.quoteShell)
   for i in 0..<args.len:
-    tmp.add(" ")
-    tmp.add args[i]
+    result.add(" ")
+    result.add args[i]
+
+proc callCompiler*(nimExe, cmd: string, args, path: seq[string]): Action =
+  let tmp = toNimCommand(nimExe, cmd, args, path)
 
   let c = parseCmdLine(tmp)
   var p = startProcess(command=c[0], args=c[1.. ^1],
@@ -52,9 +55,9 @@ proc callCompiler*(nimExe, cmd: string, args, path: seq[string]): Action =
   var err = ""
   var tmpl = ""
   var x = newStringOfCap(120)
-  var nimout = ""
+  result.file = ""
   while outp.readLine(x.TaintedString) or running(p):
-    nimout.add(x & "\n")
+    result.file.add(x & "\n")
     if x =~ pegOfInterest:
       # `err` should contain the last error/warning message
       err = x
