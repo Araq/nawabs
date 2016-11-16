@@ -43,6 +43,13 @@ Commands
   versions.
 
 
+TODO
+====
+
+- Clearly distinguish between package name and build command to run the tinker
+  algorithm with.
+- Add support for reading nimble dependencies, if there is a ``.nimble`` file.
+- Implement tinker hooks for manual interventions.
 
 
 (c) 2016 Andreas Rumpf
