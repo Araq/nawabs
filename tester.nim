@@ -9,11 +9,21 @@
 ## Tests.
 import strutils, os, osutils
 
+template withWs(ws, body) =
+  removeDir(ws)
+  createDir(ws / "config")
+  copyExe("nawabs".exe, ws / "nawabs".exe)
+  copyFile("config/roots.nims", ws / "config/roots.nims")
+  withDir ws:
+    body
+  removeDir(ws)
+
 proc main =
-  createDir("testws")
-  withDir "testws":
+  withWs "testws":
     exec "nawabs init"
-    exec "nawabs build c2nim"
-  removeDir("testws")
+    exec "nawabs build --noquestions c2nim"
+  withWs "testws2":
+    exec "nawabs init"
+    exec "nawabs clone --noquestions --deps:nimxdeps_ nimx"
 
 main()

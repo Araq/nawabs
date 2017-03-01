@@ -8,9 +8,12 @@
 
 ## OS utilities like 'exec' and 'withDir'.
 
-import os, strutils
+import os, strutils, osproc
 
-proc error*(msg: string) = quit "[Error] " & msg
+proc error*(msg: string) =
+  when defined(debug):
+    writeStackTrace()
+  quit "[Error] " & msg
 
 proc exec*(cmd: string) =
   if execShellCmd(cmd) != 0:
@@ -27,7 +30,7 @@ template withDir*(dir, body) =
 proc isUrl*(x: string): bool =
   x.startsWith("git://") or x.startsWith("https://") or x.startsWith("http://")
 
-proc cloneUrl*(url: string; cloneUsingHttps: bool) =
+proc cloneUrl*(url, dest: string; cloneUsingHttps: bool) =
   var modUrl =
     if url.startsWith("git://") and cloneUsingHttps:
       "https://" & url[6 .. ^1]
@@ -38,9 +41,29 @@ proc cloneUrl*(url: string; cloneUsingHttps: bool) =
   if modUrl.contains("github.com") and modUrl.endswith("/"):
     modUrl = modUrl[0 .. ^2]
 
-  if execShellCmd("git ls-remote " & modUrl) == QuitSuccess:
-    exec "git clone " & modUrl
-  elif execShellCmd("hg identify " & modUrl) == QuitSuccess:
-    exec "hg clone " & modUrl
+  let (_, exitCode) = execCmdEx("git ls-remote --quiet --tags " & modUrl)
+  if exitCode == QuitSuccess:
+    exec "git clone " & modUrl & " " & dest
   else:
-    error "Unable to identify url: " & modUrl
+    let (_, exitCode) = execCmdEx("hg identify " & modUrl)
+    if exitCode == QuitSuccess:
+      exec "hg clone " & modUrl & " " & dest
+    else:
+      error "Unable to identify url: " & modUrl
+
+proc exe*(f: string): string =
+  result = addFileExt(f, ExeExt)
+  when defined(windows):
+    result = result.replace('/','\\')
+
+proc tryExec*(cmd: string): bool =
+  echo(cmd)
+  result = execShellCmd(cmd) == 0
+
+proc safeRemove*(filename: string) =
+  if existsFile(filename): removeFile(filename)
+
+proc copyExe*(source, dest: string) =
+  safeRemove(dest)
+  copyFile(dest=dest, source=source)
+  inclFilePermissions(dest, {fpUserExec})

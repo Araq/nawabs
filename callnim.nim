@@ -174,7 +174,8 @@ proc extractNimbleDeps*(nimbleExe, pkg: string): NimbleInfo =
         while j < tok.len:
           j = token(tok, j, r)
           if usenext:
-            result.requires.add r
+            if r != "nim" and r != "nimrod":
+              result.requires.add r
             usenext = false
           if r == ",": usenext = true
       else: discard

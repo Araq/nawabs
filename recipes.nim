@@ -34,9 +34,10 @@ template recipesDir(workspace): untyped = workspace / recipesDirName
 proc toRecipe*(workspace, package: string): string =
   recipesDir(workspace) / package.projToKey
 
-proc gitExec(dir, proj: string) =
+proc gitExec(dir, proj: string): bool {.discardable.} =
   withDir dir:
-    exec("git " & proj)
+    let (outp, exitCode) = execCmdEx("git " & proj)
+    result = "nothing added to commit" in outp or exitCode == 0
 
 proc writeHelper() =
   writeFile(utils & ".nim", """

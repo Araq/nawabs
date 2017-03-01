@@ -52,12 +52,11 @@ proc installDep(c: Config; p: Package): string =
   if c.deps.len > 0:
     createDir c.deps
     withDir c.deps:
-      cloneUrl(p.url, c.cloneUsingHttps)
+      cloneUrl(p.url, p.name, c.cloneUsingHttps)
     return c.deps / p.name
   if c.noquestions:
-    echo "cloning package ", p.name
     withDir c.workspace:
-      cloneUrl(p.url, c.cloneUsingHttps)
+      cloneUrl(p.url, p.name, c.cloneUsingHttps)
     return c.workspace / p.name
 
   echo "package ", p.name, " seems to be a dependency, but is not part of the",
@@ -71,10 +70,10 @@ proc installDep(c: Config; p: Package): string =
       echo "Error: cannot use " & recipesDirName & " as subdir"
     of "workspace", "w", "ws", "_", "":
       withDir c.workspace:
-        cloneUrl(p.url, c.cloneUsingHttps)
+        cloneUrl(p.url, p.name, c.cloneUsingHttps)
       return c.workspace / p.name
     of ".":
-      cloneUrl(p.url, c.cloneUsingHttps)
+      cloneUrl(p.url, p.name, c.cloneUsingHttps)
       return getCurrentDir() / p.name
     else:
       if not inp.endsWith"_":
@@ -82,15 +81,15 @@ proc installDep(c: Config; p: Package): string =
       else:
         createDir inp
         withDir inp:
-          cloneUrl(p.url, c.cloneUsingHttps)
+          cloneUrl(p.url, p.name, c.cloneUsingHttps)
         return inp / p.name
 
 proc findProj(path: string; p: string): string =
   # ensure that 'foo_/bar' takes precedence over 'sub/dir_/bar':
   var subdirs: seq[string]
   for k, dir in os.walkDir(path, relative=true):
-    if k == pcDir:
-      if p.endsWith("_"):
+    if k == pcDir and dir != recipesDirName:
+      if dir.endsWith("_"):
         if subdirs.isNil: subdirs = @[]
         subdirs.add dir
       if cmpRunesIgnoreCase(p, dir) == 0:
@@ -118,12 +117,14 @@ proc cloneRec*(c: Config; pkgList: seq[Package]; package: string; rec=0): string
   else:
     let proj = findProj(c.workspace, p.name)
     if proj.len == 0:
+      var dep: string
       if rec == 0:
-        cloneUrl(p.url, c.cloneUsingHttps)
+        cloneUrl(p.url, p.name, c.cloneUsingHttps)
+        dep = p.name
       else:
-        discard installDep(c, p)
+        dep = installDep(c, p)
       # now try to extract deps and recurse:
-      let info = extractNimbleDeps(c.nimbleExe, p.name)
+      let info = extractNimbleDeps(c.nimbleExe, dep)
       for r in info.requires:
         discard cloneRec(c, pkgList, r, rec+1)
     else:
@@ -147,42 +148,40 @@ proc selectCandidate(conf: Config; c: PkgCandidates): Package =
             if choice < 1 or choice > c[i].len:
               raise newException(ValueError, "out of range")
             return c[i][choice-1]
-          except ValueError:
+          except ValueError, OverflowError:
             echo "Please type in 'abort' or a number in the range 1..", c[i].len
 
 proc tinker(c: Config; pkgList: seq[Package]; pkg, cmd: string; args: seq[string]) =
   var path: seq[string] = @[]
   var todo: Action
-  while true:
-    let lastDir = getCurrentDir()
-    let newDir = lastDir / args[0]
-    if dirExists(newDir): setCurrentDir(newDir)
-    try:
+  let proj = findProj(c.workspace, pkg)
+  if proj.len == 0:
+    error "cannot find package: " & pkg
+  withDir proj:
+    while true:
       todo = callCompiler(c.nimExe, cmd, args, path)
-    finally:
-      setCurrentDir(lastDir)
-    case todo.k
-    of Success:
-      echo "Build Successful."
-      if not c.norecipes:
-        writeRecipe(c.workspace, pkg,
-                    toNimCommand(c.nimExe, cmd, args, path), path)
-      quit 0
-    of Failure:
-      error "Hard failure. Don't know how to proceed.\n" & todo.file
-    of FileMissing:
-      let terms = todo.file.changeFileExt("").split({'\\','/'})
-      let p = selectCandidate(c, determineCandidates(pkgList, terms))
-      if p == nil:
-        error "No package found that could be missing for: " & todo.file
-      else:
-        if path.contains(p.name):
-          error "Package already in --path and yet compilation failed: " & p.name
-        var dep = findProj(c.workspace, p.name)
-        if dep.len == 0:
-          dep = installDep(c, p)
-          if dep.len == 0: error "Aborted."
-        path.add dep
+      case todo.k
+      of Success:
+        echo "Build Successful."
+        if not c.norecipes:
+          writeRecipe(c.workspace, pkg,
+                      toNimCommand(c.nimExe, cmd, args, path), path)
+        quit 0
+      of Failure:
+        error "Hard failure. Don't know how to proceed.\n" & todo.file
+      of FileMissing:
+        let terms = todo.file.changeFileExt("").split({'\\','/'})
+        let p = selectCandidate(c, determineCandidates(pkgList, terms))
+        if p == nil:
+          error "No package found that could be missing for: " & todo.file
+        else:
+          if path.contains(p.name):
+            error "Package already in --path and yet compilation failed: " & p.name
+          var dep = findProj(c.workspace, p.name)
+          if dep.len == 0:
+            dep = installDep(c, p)
+            if dep.len == 0: error "Aborted."
+          path.add dep
 
 proc tinkerCmd*(c: Config; pkgList: seq[Package]; pkg: string;
                 args: seq[string]) =

@@ -86,7 +86,7 @@ proc build(c: Config; pkgList: seq[Package]; pkg: string) =
     # clone cloned it to the current working dir:
     proj = getCurrentDir() / pkg
   if not execRecipe(c, pkg, "", attempt=true):
-    tinkerPkg(c, pkgList, proj)
+    tinkerPkg(c, pkgList, pkg)
 
 proc main(c: Config) =
   var action = ""
