@@ -1,9 +1,10 @@
 =================================================================
-       Nawabs
+                        Nawabs
 =================================================================
 
 Nawabs ("nobody agrees with this approach of building software") is a tool that
-builds upon Nimble's package repository, but throws away everything else.
+builds upon Nimble's package repository, but throws away the fragile versioning
+specifications, instead it uses commit hashes.
 
 Nawabs is the anti package manager, it builds Nim software packages with a
 smart algorithm and it ignores versioning.
@@ -22,8 +23,29 @@ as well as the used commit hashes.
 
 Recipe files are version controlled.
 
-Nawabs always works within a "workspace". To make a workspace out of the
-current working directory run ``nawabs init``.
+Nawabs always works within a "workspace". A workspace is a collection of
+"packages".
+
+To make a workspace out of the current working directory run ``nawabs init``.
+
+Every direct child directory in the workspace is treated as a
+package. Subdirectories are part of the package
+search space if they end in an underscore. As an example consider this
+directory layout:
+
+  workspace/
+    nimcore_/
+      jester/
+      compiler/
+
+    c2nim/
+    backup/
+      c2nim
+
+``c2nim`` is a package since it's a direct child of the workspace, ``jester``
+and ``compiler`` are part of the workspace since they are under ``nimcore_``
+which ends in an underscore. ``backup/c2nim`` is not part of the workspace
+because ``backup`` doesn't end in an underscore.
 
 
 Commands
@@ -32,24 +54,19 @@ Commands
 ``nawabs init``
   Make the current working directory your workspace.
 
-``nawabs c nake``
-  Nawabs clones 'nake' and tries to build it.
+``nawabs tinker pkg``
+  Nawabs clones 'pkg' and tries to build it.
 
-``nawabs pinned nake``
-  Rebuilds 'nake' in the same configuration that was successful the last time.
+``nawabs pinned pkg``
+  Rebuilds 'pkg' in the same configuration that was successful the last time.
 
-``nawabs update nake``
-  Rebuilds 'nake' but updates 'nake' and its dependencies to use the latest
+``nawabs pinnedcmd pkg``
+  Outputs the last command that was successful at building "pkg".
+
+``nawabs update pkg``
+  Rebuilds 'pkg' but updates 'pkg' and its dependencies to use the latest
   versions.
 
+For a complete list of commands, run ``nawabs --help``.
 
-TODO
-====
-
-- Clearly distinguish between package name and build command to run the tinker
-  algorithm with.
-- Add support for reading nimble dependencies, if there is a ``.nimble`` file.
-- Implement tinker hooks for manual interventions.
-
-
-(c) 2016 Andreas Rumpf
+(c) 2017 Andreas Rumpf

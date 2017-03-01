@@ -9,6 +9,7 @@
 ## This module calls Nim and decides what to do next.
 
 import strutils, os, osproc, streams, pegs
+import osutils
 
 let
   pegLineError =
@@ -95,3 +96,110 @@ proc callCompiler*(nimExe, cmd: string, args, path: seq[string]): Action =
       result.k = FileMissing
   elif suc =~ pegSuccess:
     result.k = Success
+
+discard """
+  nimble dump
+Reading from config file at C:\Users\Anwender\AppData\Roaming\nimble\nimble.ini
+name: "nimx"
+version: "0.1"
+author: "Yuriy Glukhov"
+desc: "GUI framework"
+license: "BSD"
+skipDirs: "test/android/com.mycompany.MyGame"
+skipFiles: ""
+skipExt: ""
+installDirs: ""
+installFiles: ""
+installExt: ""
+requires: "sdl2 any version, opengl any version, jnim any version, nake any version, closure_compiler any version, jester any version, https://github.com/yglukhov/ttf any version, https://github.com/yglukhov/async_http_request any version"
+bin: ""
+binDir: ""
+srcDir: ""
+backend: "c"
+"""
+
+type
+  NimbleInfo* = object
+    backend*: string
+    srcDir*: string
+    requires*: seq[string]
+
+proc token(s: string; idx: int; lit: var string): int =
+  var i = idx
+  if i >= s.len: return i
+  while s[i] in Whitespace: inc(i)
+  lit.setLen 0
+  if s[i] in Letters:
+    while i < s.len and s[i] notin Whitespace:
+      lit.add s[i]
+      inc i
+    if s[i-1] in {':', ','}:
+      # commas are important, colons are not:
+      if s[i-1] == ',': dec i
+      lit.setLen lit.len-1
+  elif s[i] == '"':
+    inc i
+    while i < s.len and s[i] != '"':
+      lit.add s[i]
+      inc i
+    inc i
+  else:
+    lit.add s[i]
+    inc i
+  result = i
+
+proc extractNimbleDeps*(nimbleExe, pkg: string): NimbleInfo =
+  result.backend = ""
+  result.srcDir = ""
+  result.requires = @[]
+  var tok = ""
+  withDir pkg:
+    let (dump, _) = execCmdEx(nimbleExe & " dump")
+    var i = 0
+    while i < dump.len:
+      i = token(dump, i, tok)
+      case tok
+      of "backend":
+        i = token(dump, i, tok)
+        result.backend = tok
+      of "srcDir":
+        i = token(dump, i, tok)
+        result.srcDir = tok
+      of "requires":
+        i = token(dump, i, tok)
+        result.requires = @[]
+        var j = 0
+        var r = ""
+        var usenext = true
+        while j < tok.len:
+          j = token(tok, j, r)
+          if usenext:
+            result.requires.add r
+            usenext = false
+          if r == ",": usenext = true
+      else: discard
+
+proc findProjectNimFile*(pkg: string): string =
+  const extensions = [".nims", ".cfg", ".nimcfg", ".nimble"]
+  var candidates: seq[string] = @[]
+  for k, f in os.walkDir(pkg, relative=true):
+    if k == pcFile and f != "config.nims" and f != "nim.cfg":
+      let (_, name, ext) = splitFile(f)
+      if ext in extensions:
+        let x = changeFileExt(pkg / name, ".nim")
+        if fileExists(x):
+          candidates.add name
+  if candidates.len == 1: return candidates[0]
+  for c in candidates:
+    # nim-foo foo  or  foo  nfoo
+    if (pkg in c) or (c in pkg): return c
+  return ""
+
+when isMainModule:
+  let xx = extractNimbleDeps("nimble.exe", "../../.nimble/pkgs/nimx-0.1")
+  for x in xx.requires:
+    echo extractFilename x
+  withDir "../../.nimble/pkgs":
+    echo findProjectNimFile("nimx-0.1")
+    echo findProjectNimFile("nake-1.8")
+

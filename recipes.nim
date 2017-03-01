@@ -10,12 +10,7 @@
 ## Recipe handling. A 'recipe' is a NimScript that produces the same build.
 
 import os, osproc, strutils
-
-proc error*(msg: string) = quit "[Error] " & msg
-
-proc exec*(cmd: string) =
-  if execShellCmd(cmd) != 0:
-    error "exernal program failed: " & cmd
+import osutils
 
 proc projToKey(proj: string): string =
   result = newStringOfCap(proj.len)
@@ -34,20 +29,14 @@ const
   recipesDirName* = "recipes_"
   utils = "recipe_utils"
 
-template recipesDir(): untyped = recipesDirName
+template recipesDir(workspace): untyped = workspace / recipesDirName
 
-proc toRecipe*(package: string): string = recipesDir() / package.projToKey
+proc toRecipe*(workspace, package: string): string =
+  recipesDir(workspace) / package.projToKey
 
 proc gitExec(dir, proj: string) =
-  exec("git --git-dir " & quoteShell(dir / ".git") & " " & proj)
-
-template withDir*(dir, body) =
-  let oldDir = getCurrentDir()
-  try:
-    setCurrentDir(dir)
-    body
-  finally:
-    setCurrentDir(oldDir)
+  withDir dir:
+    exec("git " & proj)
 
 proc writeHelper() =
   writeFile(utils & ".nim", """
@@ -70,18 +59,18 @@ template withDir*(dir, body) =
 template gitDep*(name, url, commit) =
   let g = name / ".git"
   if not dirExists(g): exec "git clone " & url
-  if pinnedBuild:
-    exec "git --git-dir " & g & " checkout " & commit
-  elif updatedBuild:
-    exec "git --git-dir " & g & " pull"
+  withDir "$1":
+    if pinnedBuild:
+      exec "git checkout " & commit
+    elif updatedBuild:
+      exec "git pull"
 
 template hgDep*(name, url, commit) =
   if not dirExists("$1/.hg"): exec "hg clone $2"
-  if pinnedBuild:
-    withDir "$1":
+  withDir "$1":
+    if pinnedBuild:
       exec "hg update -c $3"
-  elif updatedBuild:
-    withDir "$1":
+    elif updatedBuild:
       exec "hg pull"
 """)
 
@@ -94,24 +83,20 @@ import $1
 """ % utils
   for d in deps:
     if dirExists(d / ".git"):
-      let url = execProcess("git --git-dir " & (d / ".git") & " remote get-url origin").strip()
-      let commit = execProcess("git --git-dir " & (d / ".git") & " log -1 --pretty=format:%H").strip()
-
-      result.addf("""gitDep("$1", "$2", "$3")""", d, url, commit)
+      withDir d:
+        let url = execProcess("git remote get-url origin").strip()
+        let commit = execProcess("git log -1 --pretty=format:%H").strip()
+        result.addf("""gitDep("$1", "$2", "$3")""", d, url, commit)
     elif dirExists(d / ".hg"):
-      let oldDir = getCurrentDir()
-      try:
-        setCurrentDir(d)
+      withDir d:
         let url = execProcess("hg paths " & d).strip()
         let commit = execProcess("hg id -i").strip()
         result.addf("""hgDep("$1", "$2", "$3")""", d, url, commit)
-      finally:
-        setCurrentDir(oldDir)
   result.add "\n\nwithDir \"" & proj & "\":\n"
   result.add "  exec \"\"\"" & val & "\"\"\"\n"
 
-proc init*() =
-  let dir = recipesDir()
+proc init*(workspace: string) =
+  let dir = recipesDir(workspace)
   if not dirExists(dir):
     createDir dir
     withDir dir:
@@ -120,9 +105,9 @@ proc init*() =
       exec "git add " & utils & ".nim"
       exec "git commit -am \"nawabs: first commit\""
 
-proc writeRecipe*(proj, val: string; path: seq[string]) =
+proc writeRecipe*(workspace, proj, val: string; path: seq[string]) =
   try:
-    let dir = recipesDir()
+    let dir = recipesDir(workspace)
     let dest = dir / proj.projToKey
     writeFile dest, nailDeps(proj, val, path)
     gitExec dir, "add " & dest
