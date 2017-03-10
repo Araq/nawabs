@@ -9,11 +9,12 @@
 import strutils except toLower
 from unicode import toLower
 import os, json, parseopt
-import osutils, recipes, callnim, packages, tinkerer
+import osutils, recipes, callnim, packages, tinkerer, nimscriptsupport
 
 # XXX
+# - implement the 'build' command (bah)
 # - pkg needs to be normalized, could be subdir_/pkg now!
-# - Test extensively
+# - test extensively
 
 const
   Help = """
@@ -55,8 +56,6 @@ Options:
   -h, --help                      Print this help message.
   -v, --version                   Print version information.
   --nimExe:nim.exe                Which nim to use for building.
-  --nimbleExe:nimble.exe          Which nimble to use for package dependencies
-                                  extraction.
   --cloneUsingHttps               Use the https URL instead of git URLs for
                                   cloning.
   --workspace:DIR                 Use DIR as the current workspace.
@@ -107,9 +106,6 @@ proc main(c: Config) =
       of "nimexe":
         if val.len == 0: error "--nimExe takes a value"
         else: c.nimExe = val
-      of "nimbleexe":
-        if val.len == 0: error "--nimbleExe takes a value"
-        else: c.nimbleExe = val
       of "nodeps": c.nodeps = true
       of "deps":
         if val == recipesDirName:
@@ -162,7 +158,8 @@ proc main(c: Config) =
       createDir "config"
       let roots = "config" / "roots.nims"
       copyFile(getAppDir() / roots, roots)
-      exec c.nimExe & " e " & roots
+      copyFile(getAppDir() / "config" / nimscriptApi, nimscriptApi)
+    refresh(c)
   of "refresh": refresh(c)
   of "search", "list": search getPackages(c), args
   of "clone":
@@ -193,6 +190,12 @@ proc main(c: Config) =
     # free to later do something more convenient here
     if action.len == 0: error "command missing"
     else: error "unknown command: " & action
+
+  if c.foreignDeps.len > 0:
+    echo("Hint: This package has some external dependencies.\n",
+         "To install them you may be able to run:")
+    for fd in c.foreignDeps:
+      echo "  ", fd
 
 when isMainModule:
   main(newConfig())

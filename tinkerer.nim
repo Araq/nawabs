@@ -12,27 +12,28 @@
 import json, os, sets
 import strutils except toLower
 from unicode import toLower, cmpRunesIgnoreCase
-import osutils, packages, recipes, callnim
+import osutils, packages, recipes, callnim, nimscriptsupport
 
 type
   Config* = ref object
     refreshed*, cloneUsingHttps*, nodeps*, norecipes*, noquestions*: bool
-    nimExe*, nimbleExe*: string
+    nimExe*: string
     workspace*, deps*: string
+    foreignDeps*: seq[string]
 
 proc newConfig*(): Config =
-  Config(nimExe: "nim", nimbleExe: "nimble")
+  Config(nimExe: "nim", foreignDeps: @[])
 
 proc refresh*(c: Config) =
   withDir c.workspace / recipesDirName:
     let roots = "config" / "roots.nims"
-    exec c.nimExe & " e " & roots
+    runScript(roots, c.workspace)
 
 proc getPackages*(c: Config): seq[Package] =
   result = @[]
   var namesAdded = initSet[string]()
   var jsonFiles = 0
-  for kind, path in walkDir(c.workspace / recipesDirName):
+  for kind, path in walkDir(c.workspace / recipesDirName / "packages"):
     if kind == pcFile and path.endsWith(".json"):
       inc jsonFiles
       let packages = json.parseFile(path)
@@ -124,7 +125,8 @@ proc cloneRec*(c: Config; pkgList: seq[Package]; package: string; rec=0): string
       else:
         dep = installDep(c, p)
       # now try to extract deps and recurse:
-      let info = extractNimbleDeps(c.nimbleExe, dep)
+      let info = readPackageInfo(dep, c.workspace)
+      for fd in info.foreignDeps: c.foreignDeps.add fd
       for r in info.requires:
         discard cloneRec(c, pkgList, r, rec+1)
     else:
@@ -196,6 +198,6 @@ proc tinkerPkg*(c: Config; pkgList: seq[Package]; pkg: string) =
   if nimfile.len == 0:
     error "Cannot determine tinker command. Try 'nawabs tinker " & pkg & " c example'"
 
-  let info = extractNimbleDeps(c.nimbleExe, proj)
+  let info = readPackageInfo(proj, c.workspace)
   let cmd = if info.backend.len > 0: info.backend else: "c"
   tinker(c, pkgList, pkg, cmd, @[nimfile])

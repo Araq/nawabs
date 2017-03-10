@@ -6,25 +6,19 @@ Nawabs ("nobody agrees with this approach of building software") is a tool that
 builds upon Nimble's package repository, but throws away the fragile versioning
 specifications, instead it uses commit hashes.
 
-Nawabs is the anti package manager, it builds Nim software packages with a
-smart algorithm and it ignores versioning.
+Nawabs was built with the following design goals:
 
-Nawabs distinguishes between two different ways of building software:
+* Manage a collection of "packages". This collection is called a "workspace",
+  a package is a git or mercurial repository.
+* Build packages.
+* Record the state of the workspace that used to compile/work to get
+  "reproducible builds" (also called "Pinned Builds").
 
-1. Tinkering.
-2. Reproducible builds. ("Pinned builds".)
-
-"Tinkering" is based on an algorithm with rather adhoc rules, mimicing the way
-a human being builds software "by hand". After tinkering is successful, nawabs
-built the software package for you successfully and the steps to do so are
-written to a "recipe" file. The recipe file is a NimScript that can be
-executed again to get a reproducible build. It stores the project's dependencies
+A pinned build is described by a "recipe": The recipe file is a NimScript that
+can be executed again to get a reproducible build. It stores the project's dependencies
 as well as the used commit hashes.
 
-Recipe files are version controlled.
-
-Nawabs always works within a "workspace". A workspace is a collection of
-"packages".
+Recipe files are also version controlled.
 
 To make a workspace out of the current working directory run ``nawabs init``.
 
@@ -54,18 +48,19 @@ Commands
 ``nawabs init``
   Make the current working directory your workspace.
 
-``nawabs tinker pkg``
-  Nawabs clones 'pkg' and tries to build it.
+``nawabs build pkg``
+  Nawabs clones 'pkg' (if it doesn't exist yet) and tries to build it.
+
+``nawabs pin pkg [cmd]``
+  Rebuilds 'pkg' in the same configuration that was successful the last time. The
+  optional ``cmd`` can describe the command used for sucessfully testing the
+  package.
 
 ``nawabs pinned pkg``
   Rebuilds 'pkg' in the same configuration that was successful the last time.
 
-``nawabs pinnedcmd pkg``
-  Outputs the last command that was successful at building "pkg".
-
 ``nawabs update pkg``
-  Rebuilds 'pkg' but updates 'pkg' and its dependencies to use the latest
-  versions.
+  Updates 'pkg' and its dependencies to use the latest commits (aka ``git HEAD``).
 
 For a complete list of commands, run ``nawabs --help``.
 

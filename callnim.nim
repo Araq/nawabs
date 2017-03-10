@@ -118,68 +118,6 @@ srcDir: ""
 backend: "c"
 """
 
-type
-  NimbleInfo* = object
-    backend*: string
-    srcDir*: string
-    requires*: seq[string]
-
-proc token(s: string; idx: int; lit: var string): int =
-  var i = idx
-  if i >= s.len: return i
-  while s[i] in Whitespace: inc(i)
-  lit.setLen 0
-  if s[i] in Letters:
-    while i < s.len and s[i] notin Whitespace:
-      lit.add s[i]
-      inc i
-    if s[i-1] in {':', ','}:
-      # commas are important, colons are not:
-      if s[i-1] == ',': dec i
-      lit.setLen lit.len-1
-  elif s[i] == '"':
-    inc i
-    while i < s.len and s[i] != '"':
-      lit.add s[i]
-      inc i
-    inc i
-  else:
-    lit.add s[i]
-    inc i
-  result = i
-
-proc extractNimbleDeps*(nimbleExe, pkg: string): NimbleInfo =
-  result.backend = ""
-  result.srcDir = ""
-  result.requires = @[]
-  var tok = ""
-  withDir pkg:
-    let (dump, _) = execCmdEx(nimbleExe & " dump")
-    var i = 0
-    while i < dump.len:
-      i = token(dump, i, tok)
-      case tok
-      of "backend":
-        i = token(dump, i, tok)
-        result.backend = tok
-      of "srcDir":
-        i = token(dump, i, tok)
-        result.srcDir = tok
-      of "requires":
-        i = token(dump, i, tok)
-        result.requires = @[]
-        var j = 0
-        var r = ""
-        var usenext = true
-        while j < tok.len:
-          j = token(tok, j, r)
-          if usenext:
-            if r != "nim" and r != "nimrod":
-              result.requires.add r
-            usenext = false
-          if r == ",": usenext = true
-      else: discard
-
 proc findProjectNimFile*(pkg: string): string =
   const extensions = [".nims", ".cfg", ".nimcfg", ".nimble"]
   var candidates: seq[string] = @[]
