@@ -22,8 +22,12 @@ proc main =
   withWs "testws":
     exec "nawabs init"
     exec "nawabs build --noquestions c2nim"
+    exec "nawabc update"
+    exec "nawabs pinned c2nim"
+    exec "nawabs refresh"
   withWs "testws2":
     exec "nawabs init"
     exec "nawabs clone --noquestions --deps:nimxdeps_ nimx"
+    exec "nawabs update nimx"
 
 main()

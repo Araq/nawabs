@@ -15,8 +15,8 @@ Nawabs was built with the following design goals:
   "reproducible builds" (also called "Pinned Builds").
 
 A pinned build is described by a "recipe": The recipe file is a NimScript that
-can be executed again to get a reproducible build. It stores the project's dependencies
-as well as the used commit hashes.
+can be executed again to get a reproducible build. It stores the project's
+dependencies as well as the used commit hashes.
 
 Recipe files are also version controlled.
 
@@ -48,13 +48,11 @@ Commands
 ``nawabs init``
   Make the current working directory your workspace.
 
+``nawabs search keyword``
+  Search through the list of available packages after *keyword*.
+
 ``nawabs build pkg``
   Nawabs clones 'pkg' (if it doesn't exist yet) and tries to build it.
-
-``nawabs pin pkg [cmd]``
-  Rebuilds 'pkg' in the same configuration that was successful the last time. The
-  optional ``cmd`` can describe the command used for sucessfully testing the
-  package.
 
 ``nawabs pinned pkg``
   Rebuilds 'pkg' in the same configuration that was successful the last time.
@@ -63,5 +61,23 @@ Commands
   Updates 'pkg' and its dependencies to use the latest commits (aka ``git HEAD``).
 
 For a complete list of commands, run ``nawabs --help``.
+
+
+Scratchpad
+==========
+
+Nawabs allows to store arbitrary key/value pairs in a scratchpad that is
+version controlled, so you cannot lose data. The scratchpad is the ``env``
+subdirectory in the ``recipes_`` directory. You can use this to get
+universal portable shell aliases::
+
+  nawabs put nimtests nim c -r tests/testament/tester.nim all
+  nawabs get nimtests
+  nawabs run nimtests
+
+The special variable "_" is set after every successful ``nawabs build`` command
+to this very build command.
+You can use ``nawabs run _`` or simply ``nawabs run`` to rerun the command.
+
 
 (c) 2017 Andreas Rumpf

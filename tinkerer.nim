@@ -16,8 +16,11 @@ from osproc import quoteShell, execCmdEx
 import osutils, packages, recipes, callnim, nimscriptsupport
 
 type
+  DepsSetting* = enum
+    normalDeps, noDeps, onlyDeps
   Config* = ref object
-    refreshed*, cloneUsingHttps*, nodeps*, norecipes*, noquestions*: bool
+    refreshed*, cloneUsingHttps*, norecipes*, noquestions*: bool
+    depsSetting*: DepsSetting
     nimExe*: string
     workspace*, deps*: string
     foreignDeps*: seq[string]
@@ -49,7 +52,7 @@ proc getPackages*(c: Config): seq[Package] =
     result = getPackages(c)
 
 proc installDep(c: Config; p: Package): Project =
-  if c.nodeps:
+  if c.depsSetting == noDeps:
     error "Not allowed to clone dependency because of --nodeps: " & p.url
   if c.deps.len > 0:
     createDir c.deps

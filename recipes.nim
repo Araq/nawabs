@@ -12,10 +12,10 @@
 import os, osproc, strutils
 import osutils, packages
 
-proc projToKey(proj: Project): string =
-  result = newStringOfCap(proj.name.len)
+proc projToKey(name: string): string =
+  result = newStringOfCap(name.len)
   var pendingDash = false
-  for c in proj.name:
+  for c in name:
     if c in {'A'..'Z', 'a'..'z', '0'..'9'}:
       if pendingDash:
         if result.len > 0: result.add '_'
@@ -25,9 +25,12 @@ proc projToKey(proj: Project): string =
       pendingDash = true
   result.add ".nims"
 
+proc projToKey(proj: Project): string = projToKey(proj.name)
+
 const
   recipesDirName* = "recipes_"
   utils = "recipe_utils"
+  envDirName = "env"
 
 template recipesDir(workspace): untyped = workspace / recipesDirName
 
@@ -45,10 +48,6 @@ proc writeHelper() =
 
 import ospaths
 
-const paramIdx = when defined(nimvm): 3 else: 1
-let pinnedBuild = paramCount() >= paramIdx and paramStr(paramIdx) == "pinned"
-let updatedBuild = paramCount() >= paramIdx and paramStr(paramIdx) == "update"
-
 template withDir*(dir, body) =
   let oldDir = getCurrentDir()
   try:
@@ -58,21 +57,14 @@ template withDir*(dir, body) =
     setCurrentDir(oldDir)
 
 template gitDep*(name, url, commit) =
-  let g = name / ".git"
-  if not dirExists(g): exec "git clone " & url
+  if not dirExists(name / ".git"): exec "git clone " & url
   withDir "$1":
-    if pinnedBuild:
-      exec "git checkout " & commit
-    elif updatedBuild:
-      exec "git pull"
+    exec "git checkout " & commit
 
 template hgDep*(name, url, commit) =
   if not dirExists("$1/.hg"): exec "hg clone $2"
   withDir "$1":
-    if pinnedBuild:
-      exec "hg update -c $3"
-    elif updatedBuild:
-      exec "hg pull"
+    exec "hg update -c $3"
 """)
 
 proc nailDeps(proj: Project, val: string; deps: seq[string]): string =
@@ -112,6 +104,21 @@ proc writeRecipe*(workspace: string, proj: Project, val: string; deps: seq[strin
     let dest = dir / proj.projToKey
     writeFile dest, nailDeps(proj, val, deps)
     gitExec dir, "add " & dest
-    gitExec dir, "commit -am \"nawabs: automatic commit\""
+    gitExec dir, "commit -am \"nawabs: automatic commit (store recipe)\""
   except IOError:
     discard "failure to write a recipe does no harm"
+
+proc writeKeyValPair*(workspace: string, key, val: string) =
+  let dir = recipesDir(workspace)
+  let envdir = dir / envDirName
+  createDir envdir
+  let k = envdir / projToKey(key) & ".key"
+  # if the file already exists, store the old version in git:
+  if fileExists(k):
+    gitExec dir, "git add " & k
+    gitExec dir, "commit -am \"nawabs: automatic commit (store key/value pair)\""
+  writeFile(k, val)
+
+proc getValue*(workspace: string, key: string): string =
+  let k = recipesDir(workspace) / envDirName / projToKey(key) & ".key"
+  result = readFile(k)

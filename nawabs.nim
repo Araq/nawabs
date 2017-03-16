@@ -9,6 +9,7 @@
 import strutils except toLower
 from unicode import toLower
 import os, json, parseopt
+from osproc import quoteShell
 import osutils, recipes, callnim, packages, tinkerer, nimscriptsupport
 
 # XXX
@@ -16,7 +17,7 @@ import osutils, recipes, callnim, packages, tinkerer, nimscriptsupport
 
 const
   Help = """
-Usage: nawabs COMMAND [opts]
+Usage: nawabs [options] COMMAND [args]
 
 Commands:
   init                            Initializes the current working directory as
@@ -26,14 +27,16 @@ Commands:
                                   performed by tag and by name. If no argument
                                   is given, lists all packages.
   clone         pkg               Clones a package.
-    --deps:DIR_                   For tinkering use DIR_ as the subdirectory
+    --deps:DIR_                   Use DIR_ as the subdirectory
                                   for cloning missing dependencies. (Use '_' to
                                   denote the workspace, '.' for the current
                                   directory.)
     --nodeps                      Do not clone missing dependencies.
     --noquestions                 Do not ask any questions.
 
-  build pkg                       Build the package, ignore the recipe.
+  build pkg [args]                Build the package, save as recipe if
+                                  successful. You can pass optional args
+                                  like -d:release to the build.
     --deps:DIR_                   Use DIR_ as the subdirectory
                                   for cloning missing dependencies. (Use '_' to
                                   denote the workspace, '.' for the current
@@ -44,16 +47,22 @@ Commands:
 
   tinker pkg                      Build the package via tinkering. Experimental,
                                   do not complain if it fails.
-  path pkg-list                   Shows absolute paths to the installed packages
+  path pkg-list                   Show absolute paths to the installed packages
                                   specified.
+  deps pkg                        Show required ``--path:xyz`` command line to
+                                  build the given package.
 
   update        pkg               Update a package and all of its dependencies.
     --nodeps                      Do not update its dependencies.
+    --depsOnly                    Only update its dependencies.
   update                          Update every package in the workspace that
                                   doesn't have uncommitted changes.
   pinned        pkg               Use the recipe to get a reproducible build.
-  pinnedcmd     pkg               Output the last command that built pkg
-                                  successfully.
+
+  put           key value         Put a key value pair to the scratchpad.
+  get           key               Get the value to a key back.
+  run           key               Get the value to a key back and run it as
+                                  a command.
 
 Options:
   -h, --help                      Print this help message.
@@ -65,43 +74,50 @@ Options:
 """
   Version = "1.0"
 
-proc outputRecipe(c: Config; proj: Project) =
-  let recipe = toRecipe(c.workspace, proj)
-  if not fileExists recipe:
-    error "no recipe found: " & recipe
-  else:
-    echo c.nimExe & " e " & recipe
-
-proc execRecipe(c: Config; proj: Project; cmd: string;
+proc execRecipe(c: Config; proj: Project;
                 attempt = false): bool {.discardable.} =
   let recipe = toRecipe(c.workspace, proj)
   if not fileExists recipe:
     if not attempt:
       error "no recipe found: " & recipe
   else:
-    exec c.nimExe & " e " & recipe & " " & cmd
-    result = true
+    runScript(recipe, c.workspace)
 
 proc getProject(c: Config; name: string): Project =
   result = findProj(c.workspace, name)
   if result.name.len == 0:
     error "cannot find package " & name
 
-proc build(c: Config; pkgList: seq[Package]; pkg: string) =
+proc build(c: Config; pkgList: seq[Package]; pkg, rest: string) =
   var cmd = c.nimExe
+  if rest.len > 0:
+    cmd.add ' '
+    cmd.add rest
   var deps: seq[string] = @[]
   buildCmd c, getPackages(c), pkg, cmd, deps
   exec cmd
   if not c.norecipes:
     writeRecipe(c.workspace, getProject(c, pkg), cmd, deps)
+  writeKeyValPair(c.workspace, "_", cmd)
+
+proc listDeps(c: Config, pkg: string) =
+  var cmd = ""
+  var deps: seq[string] = @[]
+  buildCmd c, @[], pkg, cmd, deps
+  var result = ""
+  for d in deps:
+    result.add " --path:"
+    result.add quoteShell(d)
+  echo result
 
 proc update(c: Config; pkg: string) =
   let p = getProject(c, pkg)
   var cmd = c.nimExe
   var deps: seq[string] = @[]
   buildCmd c, getPackages(c), pkg, cmd, deps
-  updateProject(p.toPath)
-  if not c.nodeps:
+  if c.depsSetting != onlyDeps:
+    updateProject(p.toPath)
+  if c.depsSetting != noDeps:
     for d in deps: updateProject(d)
 
 proc echoPath(c: Config, a: string) =
@@ -111,13 +127,23 @@ proc echoPath(c: Config, a: string) =
 proc main(c: Config) =
   var action = ""
   var args: seq[string] = @[]
-  for kind, key, val in getOpt():
-    case kind
+  var rest = ""
+
+  template handleRest() =
+    if args.len == 1 and action in ["build", "put"]:
+      rest = cmdLineRest(p)
+      break
+
+  var p = initOptParser()
+  while true:
+    next(p)
+    case p.kind
     of cmdArgument:
-      if action.len == 0: action = key
-      else: args.add key
+      if action.len == 0: action = p.key
+      else: args.add p.key
+      handleRest()
     of cmdLongOption, cmdShortOption:
-      case key.normalize
+      case p.key.normalize
       of "version", "v":
         echo Version
         quit 0
@@ -125,25 +151,26 @@ proc main(c: Config) =
         echo Help
         quit 0
       of "nimexe":
-        if val.len == 0: error "--nimExe takes a value"
-        else: c.nimExe = val
-      of "nodeps": c.nodeps = true
+        if p.val.len == 0: error "--nimExe takes a value"
+        else: c.nimExe = p.val
+      of "nodeps": c.depsSetting = noDeps
+      of "depsonly": c.depsSetting = onlyDeps
       of "deps":
-        if val == recipesDirName:
+        if p.val == recipesDirName:
           error "cannot use " & recipesDirName & " for --deps"
-        elif val.len > 1 and val.endsWith"_":
-          c.deps = val
+        elif p.val.len > 1 and p.val.endsWith"_":
+          c.deps = p.val
         else:
           error "deps directory must end in an underscore"
       of "norecipes": c.norecipes = true
       of "cloneusinghttps": c.cloneUsingHttps = true
       of "noquestions": c.noquestions = true
       of "workspace":
-        if val.len == 0: error "--" & key & " takes a value"
-        else: c.workspace = val
+        if p.val.len == 0: error "--" & p.key & " takes a value"
+        else: c.workspace = p.val
       else:
-        error "unkown command line option: " & key
-    of cmdEnd: discard "cannot happen"
+        error "unkown command line option: " & p.key
+    of cmdEnd: break
   if c.workspace.len > 0:
     if not dirExists(c.workspace / recipesDirName):
       error c.workspace & "is not a workspace"
@@ -197,10 +224,7 @@ proc main(c: Config) =
       update(c, args[0])
   of "pinned":
     singlePkg()
-    execRecipe c, getProject(c, args[0]), "pinned"
-  of "pinnedcmd":
-    singlePkg()
-    outputRecipe c, getProject(c, args[0])
+    execRecipe c, getProject(c, args[0])
   of "tinker":
     if args.len == 0:
       error action & " command takes one or more arguments"
@@ -210,9 +234,30 @@ proc main(c: Config) =
       tinkerCmd(c, getPackages(c), args[0], args[1..^1])
   of "build":
     singlePkg()
-    build c, getPackages(c), args[0]
+    build c, getPackages(c), args[0], rest
+  of "deps":
+    singlePkg()
+    listDeps c, args[0]
   of "path":
     for a in args: echoPath(c, a)
+  of "get":
+    if args.len > 1:
+      error action & " command takes one or zero names"
+    try:
+      echo getValue(c.workspace, if args.len == 1: args[0] else: "_")
+    except IOError:
+      echo ""
+  of "put":
+    writeKeyValPair(c.workspace, args[0], rest)
+  of "run":
+    if args.len > 1:
+      error action & " command takes one or zero names"
+    let k = if args.len == 1: args[0] else: "_"
+    try:
+      let v = getValue(c.workspace, k)
+      exec v
+    except IOError:
+      error "no variable found: " & k
   else:
     # typing in 'nawabs' with no command currently raises an error so we're
     # free to later do something more convenient here
