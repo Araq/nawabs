@@ -13,7 +13,7 @@
 import strutils except toLower
 from unicode import toLower
 
-import json, osutils
+import os, json, osutils
 
 type
   Package* = ref object
@@ -28,6 +28,11 @@ type
     version*: string
     dvcsTag*: string
     web*: string # Info url for humans.
+  Project* = object
+    name*: string
+    subdir*: string # always relative to the workspace
+
+proc toPath*(p: Project): string = p.subdir / p.name
 
 proc assumePackage*(name, url: string): Package =
   new result

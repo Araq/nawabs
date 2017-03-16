@@ -315,3 +315,6 @@ proc readPackageInfo*(proj, workspace: string): PackageInfo =
 
 proc runScript*(file, workspace: string) =
   discard execScript(newModuleGraph(), newIdentCache(), file, workspace)
+
+proc findMainNimFile*(dir: string): string =
+  splitFile(options.findProjectNimFile(dir)).name

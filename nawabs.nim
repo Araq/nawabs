@@ -12,8 +12,6 @@ import os, json, parseopt
 import osutils, recipes, callnim, packages, tinkerer, nimscriptsupport
 
 # XXX
-# - implement the 'build' command (bah)
-# - pkg needs to be normalized, could be subdir_/pkg now!
 # - test extensively
 
 const
@@ -35,8 +33,8 @@ Commands:
     --nodeps                      Do not clone missing dependencies.
     --noquestions                 Do not ask any questions.
 
-  tinker pkg [cmd]                Tinker to build the package, ignore the recipe.
-    --deps:DIR_                   For tinkering use DIR_ as the subdirectory
+  build pkg                       Build the package, ignore the recipe.
+    --deps:DIR_                   Use DIR_ as the subdirectory
                                   for cloning missing dependencies. (Use '_' to
                                   denote the workspace, '.' for the current
                                   directory.)
@@ -44,13 +42,18 @@ Commands:
     --norecipes                   Do not use the recipes mechanism.
     --noquestions                 Do not ask any questions.
 
-  update        pkg               Updates a package and all of its dependencies.
-  pinned        pkg               Uses the recipe to get a reproducible build.
+  tinker pkg                      Build the package via tinkering. Experimental,
+                                  do not complain if it fails.
+  path pkg-list                   Shows absolute paths to the installed packages
+                                  specified.
+
+  update        pkg               Update a package and all of its dependencies.
+    --nodeps                      Do not update its dependencies.
+  update                          Update every package in the workspace that
+                                  doesn't have uncommitted changes.
+  pinned        pkg               Use the recipe to get a reproducible build.
   pinnedcmd     pkg               Output the last command that built pkg
                                   successfully.
-  build         pkg               Builds a package. Uses the recipe
-                                  if available, else it 'tinkers'. If pkg is
-                                  not part of the workspace, it is 'cloned'.
 
 Options:
   -h, --help                      Print this help message.
@@ -62,16 +65,16 @@ Options:
 """
   Version = "1.0"
 
-proc outputRecipe(c: Config; package: string) =
-  let recipe = toRecipe(c.workspace, package)
+proc outputRecipe(c: Config; proj: Project) =
+  let recipe = toRecipe(c.workspace, proj)
   if not fileExists recipe:
     error "no recipe found: " & recipe
   else:
     echo c.nimExe & " e " & recipe
 
-proc execRecipe(c: Config; package, cmd: string;
+proc execRecipe(c: Config; proj: Project; cmd: string;
                 attempt = false): bool {.discardable.} =
-  let recipe = toRecipe(c.workspace, package)
+  let recipe = toRecipe(c.workspace, proj)
   if not fileExists recipe:
     if not attempt:
       error "no recipe found: " & recipe
@@ -79,13 +82,31 @@ proc execRecipe(c: Config; package, cmd: string;
     exec c.nimExe & " e " & recipe & " " & cmd
     result = true
 
+proc getProject(c: Config; name: string): Project =
+  result = findProj(c.workspace, name)
+  if result.name.len == 0:
+    error "cannot find package " & name
+
 proc build(c: Config; pkgList: seq[Package]; pkg: string) =
-  var proj = cloneRec(c, pkgList, pkg)
-  if proj.len == 0:
-    # clone cloned it to the current working dir:
-    proj = getCurrentDir() / pkg
-  if not execRecipe(c, pkg, "", attempt=true):
-    tinkerPkg(c, pkgList, pkg)
+  var cmd = c.nimExe
+  var deps: seq[string] = @[]
+  buildCmd c, getPackages(c), pkg, cmd, deps
+  exec cmd
+  if not c.norecipes:
+    writeRecipe(c.workspace, getProject(c, pkg), cmd, deps)
+
+proc update(c: Config; pkg: string) =
+  let p = getProject(c, pkg)
+  var cmd = c.nimExe
+  var deps: seq[string] = @[]
+  buildCmd c, getPackages(c), pkg, cmd, deps
+  updateProject(p.toPath)
+  if not c.nodeps:
+    for d in deps: updateProject(d)
+
+proc echoPath(c: Config, a: string) =
+  let p = getProject(c, a)
+  echo c.workspace / p.subdir / p.name
 
 proc main(c: Config) =
   var action = ""
@@ -110,7 +131,7 @@ proc main(c: Config) =
       of "deps":
         if val == recipesDirName:
           error "cannot use " & recipesDirName & " for --deps"
-        elif val.endsWith"_":
+        elif val.len > 1 and val.endsWith"_":
           c.deps = val
         else:
           error "deps directory must end in an underscore"
@@ -164,17 +185,22 @@ proc main(c: Config) =
   of "search", "list": search getPackages(c), args
   of "clone":
     singlePkg()
-    let proj = cloneRec(c, getPackages(c), args[0])
-    if proj.len > 0:
-      error "Already part of workspace: " & proj
+    if cloneRec(c, getPackages(c), args[0]):
+      error "Already part of workspace: " & args[0]
   of "help", "h":
     echo Help
-  of "update", "pinned":
+  of "update":
+    if args.len == 0:
+      updateEverything(c.workspace)
+    else:
+      singlePkg()
+      update(c, args[0])
+  of "pinned":
     singlePkg()
-    execRecipe c, args[0], action.normalize
+    execRecipe c, getProject(c, args[0]), "pinned"
   of "pinnedcmd":
     singlePkg()
-    outputRecipe c, args[0]
+    outputRecipe c, getProject(c, args[0])
   of "tinker":
     if args.len == 0:
       error action & " command takes one or more arguments"
@@ -185,6 +211,8 @@ proc main(c: Config) =
   of "build":
     singlePkg()
     build c, getPackages(c), args[0]
+  of "path":
+    for a in args: echoPath(c, a)
   else:
     # typing in 'nawabs' with no command currently raises an error so we're
     # free to later do something more convenient here
