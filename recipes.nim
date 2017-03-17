@@ -1,11 +1,9 @@
 #
-#
 #    Nawabs -- The Anti package manager for Nim
-#        (c) Copyright 2016 Andreas Rumpf
+#        (c) Copyright 2017 Andreas Rumpf
 #
 #    See the file "license.txt", included in this
 #    distribution, for details about the copyright.
-
 
 ## Recipe handling. A 'recipe' is a NimScript that produces the same build.
 

@@ -1,7 +1,6 @@
 #
-#
 #    Nawabs -- The Anti package manager for Nim
-#        (c) Copyright 2016 Andreas Rumpf
+#        (c) Copyright 2017 Andreas Rumpf
 #
 #    See the file "license.txt", included in this
 #    distribution, for details about the copyright.
@@ -36,17 +35,15 @@ type
     k*: ActionKind
     file*: string
 
-proc toNimCommand*(nimExe, cmd: string, args, path: seq[string]): string =
-  result = nimExe & " " & cmd & " --noNimblePath"
+proc toNimCommand*(nimExe, args: string, path: seq[string]): string =
+  result = nimExe & " --noNimblePath"
   for p in path:
     result.add(" -p:")
     result.add(p.quoteShell)
-  for i in 0..<args.len:
-    result.add(" ")
-    result.add args[i]
+  result.add args
 
-proc callCompiler*(nimExe, cmd: string, args, path: seq[string]): Action =
-  let tmp = toNimCommand(nimExe, cmd, args, path)
+proc callCompiler*(nimExe, args: string, path: seq[string]): Action =
+  let tmp = toNimCommand(nimExe, args, path)
 
   let c = parseCmdLine(tmp)
   var p = startProcess(command=c[0], args=c[1.. ^1],

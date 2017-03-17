@@ -1,7 +1,6 @@
 #
-#
 #    Nawabs -- The Anti package manager for Nim
-#        (c) Copyright 2016 Andreas Rumpf
+#        (c) Copyright 2017 Andreas Rumpf
 #
 #    See the file "license.txt", included in this
 #    distribution, for details about the copyright.
@@ -227,7 +226,7 @@ proc selectCandidate(conf: Config; c: PkgCandidates): Package =
           except ValueError, OverflowError:
             echo "Please type in 'abort' or a number in the range 1..", c[i].len
 
-proc tinker(c: Config; pkgList: seq[Package]; pkg, cmd: string; args: seq[string]) =
+proc tinker(c: Config; pkgList: seq[Package]; pkg, args: string) =
   var path: seq[string] = @[]
   var todo: Action
   let proj = findProj(c.workspace, pkg)
@@ -235,13 +234,14 @@ proc tinker(c: Config; pkgList: seq[Package]; pkg, cmd: string; args: seq[string
     error "cannot find package: " & pkg
   withDir proj.toPath:
     while true:
-      todo = callCompiler(c.nimExe, cmd, args, path)
+      todo = callCompiler(c.nimExe, args, path)
       case todo.k
       of Success:
         echo "Build Successful."
+        let cmd = toNimCommand(c.nimExe, args, path)
         if not c.norecipes:
-          writeRecipe(c.workspace, proj,
-                      toNimCommand(c.nimExe, cmd, args, path), path)
+          writeRecipe(c.workspace, proj, cmd, path)
+        writeKeyValPair(c.workspace, "_", cmd)
         quit 0
       of Failure:
         error "Hard failure. Don't know how to proceed.\n" & todo.file
@@ -259,9 +259,8 @@ proc tinker(c: Config; pkgList: seq[Package]; pkg, cmd: string; args: seq[string
             if dep.name.len == 0: error "Aborted."
           path.add dep.toPath
 
-proc tinkerCmd*(c: Config; pkgList: seq[Package]; pkg: string;
-                args: seq[string]) =
-  tinker(c, pkgList, pkg, args[0], args[1..^1])
+proc tinkerCmd*(c: Config; pkgList: seq[Package]; pkg, args: string) =
+  tinker(c, pkgList, pkg, args)
 
 proc tinkerPkg*(c: Config; pkgList: seq[Package]; pkg: string) =
   var proj = findProj(c.workspace, pkg)
@@ -274,4 +273,4 @@ proc tinkerPkg*(c: Config; pkgList: seq[Package]; pkg: string) =
 
   let info = readPackageInfo(proj.toPath, c.workspace)
   let cmd = if info.backend.len > 0: info.backend else: "c"
-  tinker(c, pkgList, pkg, cmd, @[nimfile])
+  tinker(c, pkgList, pkg, cmd & " " & nimfile)

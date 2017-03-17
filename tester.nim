@@ -1,5 +1,4 @@
 #
-#
 #    Nawabs -- The Anti package manager for Nim
 #        (c) Copyright 2017 Andreas Rumpf
 #

@@ -1,5 +1,4 @@
 #
-#
 #    Nawabs -- The Anti package manager for Nim
 #        (c) Copyright 2017 Andreas Rumpf
 #
@@ -47,7 +46,7 @@ Commands:
 
   pinned        pkg               Use the recipe to get a reproducible build.
 
-  tinker        pkg               Build the package via tinkering. Experimental,
+  tinker pkg [args]               Build the package via tinkering. Experimental,
                                   do not complain if it fails.
   path pkg-list                   Show absolute paths to the installed packages
                                   specified.
@@ -133,7 +132,7 @@ proc main(c: Config) =
   var rest = ""
 
   template handleRest() =
-    if args.len == 1 and action in ["build", "put"]:
+    if args.len == 1 and action in ["build", "put", "tinker"]:
       rest = cmdLineRest(p)
       break
 
@@ -142,7 +141,7 @@ proc main(c: Config) =
     next(p)
     case p.kind
     of cmdArgument:
-      if action.len == 0: action = p.key
+      if action.len == 0: action = p.key.normalize
       else: args.add p.key
       handleRest()
     of cmdLongOption, cmdShortOption:
@@ -232,10 +231,10 @@ proc main(c: Config) =
   of "tinker":
     if args.len == 0:
       error action & " command takes one or more arguments"
-    if args.len == 1:
+    if rest.len == 0:
       tinkerPkg(c, getPackages(c), args[0])
     else:
-      tinkerCmd(c, getPackages(c), args[0], args[1..^1])
+      tinkerCmd(c, getPackages(c), args[0], rest)
   of "build":
     singlePkg()
     build c, getPackages(c), args[0], rest

@@ -1,8 +1,9 @@
-# Copyright (C) Andreas Rumpf. All rights reserved.
-# BSD License. Look at license.txt for more info.
-
-## Implements the new configuration system for Nimble. Uses Nim as a
-## scripting language.
+#
+#    Nawabs -- The Anti package manager for Nim
+#        (c) Copyright 2017 Andreas Rumpf
+#
+#    See the file "license.txt", included in this
+#    distribution, for details about the copyright.
 
 import
   compiler / [ast, modules, passes, passaux,
