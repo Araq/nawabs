@@ -73,7 +73,7 @@ proc token(s: string; idx: int; lit: var string): int =
   while s[i] in Whitespace: inc(i)
   lit.setLen 0
   if s[i] in Letters:
-    while i < s.len and s[i] in Letters+{'_','.','-','0'..'9'}:
+    while i < s.len and s[i] notin Whitespace:
       lit.add s[i]
       inc i
   elif s[i] == '"':
@@ -118,6 +118,7 @@ proc execScript(graph: ModuleGraph; cache: IdentCache; scriptName: string, works
 
   # Ensure the compiler can find its standard library #220.
   options.gPrefixDir = getNimPrefixDir()
+  options.command = "nawabs"
 
   let pkgName = scriptName.splitFile.name
 

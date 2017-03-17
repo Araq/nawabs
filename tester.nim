@@ -10,25 +10,28 @@ import strutils, os, osutils
 
 template withWs(ws, body) =
   removeDir(ws)
-  createDir(ws / "config")
-  copyExe("nawabs".exe, ws / "nawabs".exe)
-  copyFile("config/roots.nims", ws / "config/roots.nims")
+  createDir(ws)
   withDir ws:
     body
   removeDir(ws)
 
-proc naw(s: string) = exec "nawabs " & s
+proc naw(s: string) = exec "../nawabs " & s
 
-proc main =
+proc test1 =
   withWs "testws":
     naw "init"
     naw "build --noquestions c2nim"
     naw "update"
     naw "pinned c2nim"
     naw "refresh"
+
+proc test2 =
   withWs "testws2":
     naw "init"
     naw "clone --noquestions --deps:nimxdeps_ nimx"
     naw "update nimx"
 
-main()
+when not defined(onlyTest2):
+  test1()
+when not defined(onlyTest1):
+  test2()

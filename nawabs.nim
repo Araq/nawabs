@@ -12,7 +12,7 @@ from osproc import quoteShell
 import osutils, recipes, callnim, packages, tinkerer, nimscriptsupport
 
 # XXX
-# - test extensively
+# - test tinkering
 
 const
   Help = """
@@ -116,7 +116,7 @@ proc update(c: Config; pkg: string) =
   let p = getProject(c, pkg)
   var cmd = c.nimExe
   var deps: seq[string] = @[]
-  buildCmd c, getPackages(c), pkg, cmd, deps
+  buildCmd(c, getPackages(c), pkg, cmd, deps, onlyDeps=true)
   if c.depsSetting != onlyDeps:
     updateProject(c, p.toPath)
   if c.depsSetting != noDeps:

@@ -104,19 +104,20 @@ proc findProj*(path: string; p: string): Project =
     if result.name.len > 0: return result
 
 proc updateProject*(c: Config; path: string) =
+  let projname = extractFilename(path)
   template check() =
     if c.depsSetting == askDeps:
-      stdout.write "update ", path, " (y/n)?"
+      stdout.write "update ", projname, " (y/n)?"
       if stdin.readLine().normalize.startsWith"n": return
     else:
-      echo "updating ", path
+      echo "updating ", projname
 
   if dirExists(path / ".git"):
     check()
     withDir path:
       let (outp, exitCode) = execCmdEx("git status")
       if "Changes not staged for commit" notin outp and exitCode == 0:
-        exec "git pull"
+        exec "git pull", 10
   elif dirExists(path / ".hg"):
     check()
     withDir path:
@@ -129,7 +130,7 @@ proc updateEverything*(c: Config; path: string) =
       if dir.endsWith("_"):
         updateEverything(c, dir)
       else:
-        updateProject(c, dir)
+        updateProject(c, path / dir)
 
 proc findPkg(pkgList: seq[Package]; package: string): Package =
   if package.isUrl:
@@ -148,24 +149,25 @@ proc cloneRec*(c: Config; pkgList: seq[Package]; package: string; rec=0): bool =
   if p.isNil:
     error "Cannot resolve dependency: " & package
   else:
-    let proj = findProj(c.workspace, p.name)
+    var proj = findProj(c.workspace, p.name)
     if proj.name.len == 0:
-      var dep: Project
       if rec == 0:
         cloneUrl(p.url, p.name, c.cloneUsingHttps)
-        dep = Project(name: p.name, subdir: getCurrentDir())
+        proj = Project(name: p.name, subdir: getCurrentDir())
       else:
-        dep = installDep(c, p)
-      # now try to extract deps and recurse:
-      let info = readPackageInfo(dep.toPath, c.workspace)
-      for fd in info.foreignDeps: c.foreignDeps.add fd
-      for r in info.requires:
-        discard cloneRec(c, pkgList, r, rec+1)
+        proj = installDep(c, p)
     else:
       result = true
+    # watch out, even though the project exists already, some of its
+    # dependencies might not!
+    # now try to extract deps and recurse:
+    let info = readPackageInfo(proj.toPath, c.workspace)
+    for fd in info.foreignDeps: c.foreignDeps.add fd
+    for r in info.requires:
+      discard cloneRec(c, pkgList, r, rec+1)
 
 proc buildCmd*(c: Config; pkgList: seq[Package]; package: string; result: var string;
-               deps: var seq[string]; rec=0) =
+               deps: var seq[string]; onlyDeps=false; rec=0) =
   ## returns the proj if the package is already in the workspace.
   if rec >= 10:
     error "unbounded recursion during build command creation"
@@ -184,7 +186,7 @@ proc buildCmd*(c: Config; pkgList: seq[Package]; package: string; result: var st
       proj = installDep(c, p)
     else:
       error "Cannot resolve dependency: " & package
-  let info = readPackageInfo(pname, c.workspace)
+  let info = readPackageInfo(proj.toPath, c.workspace)
   if rec == 0:
     result.add ' '
     if info.backend.len == 0: result.add 'c'
@@ -192,14 +194,15 @@ proc buildCmd*(c: Config; pkgList: seq[Package]; package: string; result: var st
     result.add " --noNimblePath"
   for fd in info.foreignDeps: c.foreignDeps.add fd
   for r in info.requires:
-    buildCmd(c, pkgList, r, result, deps, rec+1)
+    buildCmd(c, pkgList, r, result, deps, onlyDeps, rec+1)
   if rec == 0:
-    let pp = proj.toPath
-    let nimfile = findMainNimFile(pp)
-    if nimfile.len == 0:
-      error "Cannot determine main nim file for: " & pp
-    result.add " "
-    result.add pp / nimfile
+    if not onlyDeps:
+      let pp = proj.toPath
+      let nimfile = findMainNimFile(pp)
+      if nimfile.len == 0:
+        error "Cannot determine main nim file for: " & pp
+      result.add " "
+      result.add pp / nimfile
   else:
     result.add " --path:"
     result.add quoteShell(proj.toPath)

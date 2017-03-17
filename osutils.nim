@@ -14,9 +14,11 @@ proc error*(msg: string) =
     writeStackTrace()
   quit "[Error] " & msg
 
-proc exec*(cmd: string) =
-  if execShellCmd(cmd) != 0:
-    error "exernal program failed: " & cmd
+proc exec*(cmd: string; attempts=0) =
+  for i in 0..attempts:
+    if execShellCmd(cmd) == 0: return
+    if i < attempts: os.sleep(4000)
+  error "exernal program failed: " & cmd
 
 template withDir*(dir, body) =
   let oldDir = getCurrentDir()
@@ -37,18 +39,35 @@ proc cloneUrl*(url, dest: string; cloneUsingHttps: bool) =
 
   # github + https + trailing url slash causes a
   # checkout/ls-remote to fail with Repository not found
+  var isgithub = false
   if modUrl.contains("github.com") and modUrl.endswith("/"):
     modUrl = modUrl[0 .. ^2]
+    isgithub = true
 
   let (_, exitCode) = execCmdEx("git ls-remote --quiet --tags " & modUrl)
-  if exitCode == QuitSuccess:
-    exec "git clone " & modUrl & " " & dest
-  else:
+  var xcode = exitCode
+  if isgithub and exitCode != QuitSuccess:
+    # retry multiple times to avoid annoying github timeouts:
+    for i in 0..10:
+      os.sleep(4000)
+      xcode = execCmdEx("git ls-remote --quiet --tags " & modUrl)[1]
+      if xcode == QuitSuccess: break
+
+  if xcode == QuitSuccess:
+    # retry multiple times to avoid annoying github timeouts:
+    let cmd = "git clone " & modUrl & " " & dest
+    for i in 0..10:
+      if execShellCmd(cmd) == 0: return
+      os.sleep(4000)
+    error "exernal program failed: " & cmd
+  elif not isgithub:
     let (_, exitCode) = execCmdEx("hg identify " & modUrl)
     if exitCode == QuitSuccess:
       exec "hg clone " & modUrl & " " & dest
     else:
       error "Unable to identify url: " & modUrl
+  else:
+    error "Unable to identify url: " & modUrl
 
 proc exe*(f: string): string =
   result = addFileExt(f, ExeExt)
