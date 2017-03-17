@@ -1,11 +1,8 @@
 
+include "../recipe_utils"
 
-proc download(url, dest: string) =
-  exec "curl " & url & " --output " & dest
-
-exec("git clone https://github.com/nim-lang/packages packages")
-
-#for now disabled:
-#download("https://github.com/nim-lang/packages/raw/master/packages.json", "packages.json")
-#download("https://irclogs.nim-lang.org/packages.json", "packages.json")
-#download("http://nim-lang.org/nimble/packages.json", "packages.json")
+if dirExists("packages"):
+  withDir("packages"):
+    exec("git pull")
+else:
+  exec("git clone https://github.com/nim-lang/packages packages")

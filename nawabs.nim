@@ -45,7 +45,9 @@ Commands:
     --norecipes                   Do not use the recipes mechanism.
     --noquestions                 Do not ask any questions.
 
-  tinker pkg                      Build the package via tinkering. Experimental,
+  pinned        pkg               Use the recipe to get a reproducible build.
+
+  tinker        pkg               Build the package via tinkering. Experimental,
                                   do not complain if it fails.
   path pkg-list                   Show absolute paths to the installed packages
                                   specified.
@@ -55,9 +57,10 @@ Commands:
   update        pkg               Update a package and all of its dependencies.
     --nodeps                      Do not update its dependencies.
     --depsOnly                    Only update its dependencies.
+    --ask                         Ask about every dependency.
   update                          Update every package in the workspace that
                                   doesn't have uncommitted changes.
-  pinned        pkg               Use the recipe to get a reproducible build.
+    --ask                         Ask about every dependency.
 
   put           key value         Put a key value pair to the scratchpad.
   get           key               Get the value to a key back.
@@ -116,9 +119,9 @@ proc update(c: Config; pkg: string) =
   var deps: seq[string] = @[]
   buildCmd c, getPackages(c), pkg, cmd, deps
   if c.depsSetting != onlyDeps:
-    updateProject(p.toPath)
+    updateProject(c, p.toPath)
   if c.depsSetting != noDeps:
-    for d in deps: updateProject(d)
+    for d in deps: updateProject(c, d)
 
 proc echoPath(c: Config, a: string) =
   let p = getProject(c, a)
@@ -155,6 +158,7 @@ proc main(c: Config) =
         else: c.nimExe = p.val
       of "nodeps": c.depsSetting = noDeps
       of "depsonly": c.depsSetting = onlyDeps
+      of "ask": c.depsSetting = askDeps
       of "deps":
         if p.val == recipesDirName:
           error "cannot use " & recipesDirName & " for --deps"
@@ -218,7 +222,7 @@ proc main(c: Config) =
     echo Help
   of "update":
     if args.len == 0:
-      updateEverything(c.workspace)
+      updateEverything(c, c.workspace)
     else:
       singlePkg()
       update(c, args[0])

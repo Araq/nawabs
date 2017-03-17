@@ -8,6 +8,7 @@
 
 ## This module implements the "tinkering" algorithm. It's still pretty basic
 ## but it tries to mimic how a programmer would approach this problem.
+## Oh, there is also a traditional build command.
 
 import json, os, sets
 import strutils except toLower
@@ -17,7 +18,7 @@ import osutils, packages, recipes, callnim, nimscriptsupport
 
 type
   DepsSetting* = enum
-    normalDeps, noDeps, onlyDeps
+    normalDeps, noDeps, onlyDeps, askDeps
   Config* = ref object
     refreshed*, cloneUsingHttps*, norecipes*, noquestions*: bool
     depsSetting*: DepsSetting
@@ -103,24 +104,33 @@ proc findProj*(path: string; p: string): Project =
     result = findProj(path / s, p)
     if result.name.len > 0: return result
 
-proc updateProject*(path: string) =
+proc updateProject*(c: Config; path: string) =
+  template check() =
+    if c.depsSetting == askDeps:
+      stdout.write "update ", path, " (y/n)?"
+      if stdin.readLine().normalize.startsWith"n": return
+    else:
+      echo "updating ", path
+
   if dirExists(path / ".git"):
+    check()
     withDir path:
       let (outp, exitCode) = execCmdEx("git status")
       if "Changes not staged for commit" notin outp and exitCode == 0:
         exec "git pull"
   elif dirExists(path / ".hg"):
+    check()
     withDir path:
       # XXX check hg status somehow
       exec "hg pull"
 
-proc updateEverything*(path: string) =
+proc updateEverything*(c: Config; path: string) =
   for k, dir in os.walkDir(path, relative=true):
     if k == pcDir and dir != recipesDirName:
       if dir.endsWith("_"):
-        updateEverything(dir)
+        updateEverything(c, dir)
       else:
-        updateProject(dir)
+        updateProject(c, dir)
 
 proc findPkg(pkgList: seq[Package]; package: string): Package =
   if package.isUrl:
