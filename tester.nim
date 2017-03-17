@@ -18,16 +18,18 @@ template withWs(ws, body) =
     body
   removeDir(ws)
 
+proc naw(s: string) = exec "nawabs " & s
+
 proc main =
   withWs "testws":
-    exec "nawabs init"
-    exec "nawabs build --noquestions c2nim"
-    exec "nawabc update"
-    exec "nawabs pinned c2nim"
-    exec "nawabs refresh"
+    naw "init"
+    naw "build --noquestions c2nim"
+    naw "update"
+    naw "pinned c2nim"
+    naw "refresh"
   withWs "testws2":
-    exec "nawabs init"
-    exec "nawabs clone --noquestions --deps:nimxdeps_ nimx"
-    exec "nawabs update nimx"
+    naw "init"
+    naw "clone --noquestions --deps:nimxdeps_ nimx"
+    naw "update nimx"
 
 main()

@@ -121,7 +121,7 @@ proc execScript(graph: ModuleGraph; cache: IdentCache; scriptName: string, works
   let pkgName = scriptName.splitFile.name
 
   # Ensure that "nimscriptapi" is in the PATH.
-  searchPaths.add workspace / recipesDirName / nimscriptApi
+  searchPaths.add workspace / recipesDirName
 
   initDefines()
   loadConfigs(DefaultConfig)
@@ -237,7 +237,7 @@ proc multiSplit(s: string): seq[string] =
   while i < s.len:
     while s[i] in seps+Whitespace: inc i
     setLen buf, 0
-    while s[i] notin seps:
+    while i < s.len and s[i] notin seps:
       if not isTrailingWhitespace(s, i):
         buf.add s[i]
       inc i
@@ -298,7 +298,7 @@ proc readPackageInfoFromNimble(path: string; result: var PackageInfo) =
           case ev.key.normalize
           of "requires":
             for v in ev.value.multiSplit:
-              result.requires.add(parseRequires(v))
+              result.requires.addDep(parseRequires(v))
           else:
             error()
         else: error()
@@ -309,6 +309,18 @@ proc readPackageInfoFromNimble(path: string; result: var PackageInfo) =
 
 proc readPackageInfo*(proj, workspace: string): PackageInfo =
   let nf = proj / extractFilename(proj) & ".nimble"
+
+  result.skipDirs = @[]
+  result.skipFiles = @[]
+  result.skipExt = @[]
+  result.installDirs = @[]
+  result.installFiles = @[]
+  result.installExt = @[]
+  result.bin = @[]
+  result.backend = ""
+  result.requires = @[]
+  result.foreignDeps = @[]
+
   readPackageInfoFromNimble(nf, result)
   if result.isNimScript:
     readPackageInfoFromNims(newModuleGraph(), newIdentCache(), nf, workspace, result)

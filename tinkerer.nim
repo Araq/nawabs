@@ -170,6 +170,7 @@ proc buildCmd*(c: Config; pkgList: seq[Package]; package: string; result: var st
     pname = p.name
   var proj = findProj(c.workspace, pname)
   if proj.name.len == 0:
+    if p == nil: p = findPkg(pkgList, pname)
     if p != nil:
       proj = installDep(c, p)
     else:
@@ -184,8 +185,12 @@ proc buildCmd*(c: Config; pkgList: seq[Package]; package: string; result: var st
   for r in info.requires:
     buildCmd(c, pkgList, r, result, deps, rec+1)
   if rec == 0:
+    let pp = proj.toPath
+    let nimfile = findMainNimFile(pp)
+    if nimfile.len == 0:
+      error "Cannot determine main nim file for: " & pp
     result.add " "
-    result.add pname
+    result.add pp / nimfile
   else:
     result.add " --path:"
     result.add quoteShell(proj.toPath)
