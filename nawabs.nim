@@ -11,9 +11,6 @@ import os, json, parseopt
 from osproc import quoteShell
 import osutils, recipes, callnim, packages, tinkerer, nimscriptsupport
 
-# XXX
-# - test tinkering
-
 const
   Help = """
 Usage: nawabs [options] COMMAND [args]

@@ -229,14 +229,31 @@ proc selectCandidate(conf: Config; c: PkgCandidates): Package =
           except ValueError, OverflowError:
             echo "Please type in 'abort' or a number in the range 1..", c[i].len
 
+proc findSrcPaths(path, file: string; results: var seq[string]) =
+  for k, f in os.walkDir(path, relative=true):
+    case k
+    of pcFile, pcLinkToFile:
+      if cmpPaths(f, file) == 0: results.add path
+    of pcDir, pcLinkToDir:
+      findSrcPaths(path / f, file, results)
+
+proc selectSrcPath(candidates: seq[string]): string =
+  doAssert candidates.len > 0
+  var m = high(int)
+  for c in candidates:
+    if c.len < m:
+      m = c.len
+      result = c
+
 proc tinker(c: Config; pkgList: seq[Package]; pkg, args: string) =
+  const maxIters = 300
   var path: seq[string] = @[]
   var todo: Action
   let proj = findProj(c.workspace, pkg)
   if proj.name.len == 0:
     error "cannot find package: " & pkg
   withDir proj.toPath:
-    while true:
+    for i in 1..maxIters:
       todo = callCompiler(c.nimExe, args, path)
       case todo.k
       of Success:
@@ -247,20 +264,29 @@ proc tinker(c: Config; pkgList: seq[Package]; pkg, args: string) =
         writeKeyValPair(c.workspace, "_", cmd)
         quit 0
       of Failure:
-        error "Hard failure. Don't know how to proceed.\n" & todo.file
+        error "Hard failure. Don't know how to proceed.\n" & todo.file &
+          "\nLast command that was tried: \n" & toNimCommand(c.nimExe, args, path)
       of FileMissing:
         let terms = todo.file.changeFileExt("").split({'\\','/'})
-        let p = selectCandidate(c, determineCandidates(pkgList, terms))
-        if p == nil:
-          error "No package found that could be missing for: " & todo.file
-        else:
-          if path.contains(p.name):
-            error "Package already in --path and yet compilation failed: " & p.name
-          var dep = findProj(c.workspace, p.name)
+        var dep = findProj(c.workspace, splitFile(todo.file).name)
+        var p: Package = nil
+        if dep.name.len == 0:
+          p = selectCandidate(c, determineCandidates(pkgList, terms))
+          if p == nil:
+            error "No package found that could be missing for: " & todo.file
+          dep = findProj(c.workspace, p.name)
           if dep.name.len == 0:
             dep = installDep(c, p)
             if dep.name.len == 0: error "Aborted."
-          path.add dep.toPath
+        doAssert dep.name.len > 0
+        var srcPaths: seq[string] = @[]
+        findSrcPaths(dep.toPath, todo.file.addFileExt(".nim"), srcPaths)
+        if srcPaths.len == 0: srcPaths.add dep.toPath
+        let srcPath = selectSrcPath(srcPaths)
+        if path.contains(srcPath):
+          error "Package already in --path and yet compilation failed: " & p.name
+        path.add srcPath
+  error "Stopped unsuccessfully after " & $maxIters & " iterations."
 
 proc tinkerCmd*(c: Config; pkgList: seq[Package]; pkg, args: string) =
   tinker(c, pkgList, pkg, args)

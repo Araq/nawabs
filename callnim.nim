@@ -40,6 +40,7 @@ proc toNimCommand*(nimExe, args: string, path: seq[string]): string =
   for p in path:
     result.add(" -p:")
     result.add(p.quoteShell)
+  result.add ' '
   result.add args
 
 proc callCompiler*(nimExe, args: string, path: seq[string]): Action =
@@ -83,13 +84,15 @@ proc callCompiler*(nimExe, args: string, path: seq[string]): Action =
     line = parseInt(matches[1])
     column = parseInt(matches[2])
     msg = matches[3]
-    result.file = msg.extract("cannot open '", "'")
-    if result.file.len != 0:
+    let e = msg.extract("cannot open '", "'")
+    if e.len != 0:
       result.k = FileMissing
+      result.file = e
   elif err =~ pegOtherError:
     msg = matches[0]
-    result.file = msg.extract("cannot open '", "'")
-    if result.file.len != 0:
+    let e = msg.extract("cannot open '", "'")
+    if e.len != 0:
       result.k = FileMissing
+      result.file = e
   elif suc =~ pegSuccess:
     result.k = Success
