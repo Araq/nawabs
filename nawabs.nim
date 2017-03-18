@@ -253,12 +253,12 @@ proc main(c: Config) =
     let k = if args.len >= 1: args[0] else: "_"
     try:
       var v = getValue(c.workspace, k)
-      if rest.len > 0 and not rest.startsWith(' '):
-        v.add ' '
-      v.add rest
+      if rest.len > 0: v = v % rest
       exec v
     except IOError:
       error "no variable found: " & k
+    except ValueError:
+      error "invalid $expansions: " & k & " " & rest
   else:
     # typing in 'nawabs' with no command currently raises an error so we're
     # free to later do something more convenient here
