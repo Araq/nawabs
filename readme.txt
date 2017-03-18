@@ -73,7 +73,7 @@ universal portable shell aliases::
 
   nawabs put nimtests nim c -r tests/testament/tester.nim all
   nawabs get nimtests
-  nawabs run nimtests
+  nawabs run nimtests [optional further args to command]
 
 The special variable "_" is set after every successful ``nawabs build`` command
 to this very build command.

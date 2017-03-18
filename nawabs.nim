@@ -60,7 +60,7 @@ Commands:
 
   put           key value         Put a key value pair to the scratchpad.
   get           key               Get the value to a key back.
-  run           key               Get the value to a key back and run it as
+  run           key [args]        Get the value to a key back and run it as
                                   a command.
 
 Options:
@@ -129,7 +129,7 @@ proc main(c: Config) =
   var rest = ""
 
   template handleRest() =
-    if args.len == 1 and action in ["build", "put", "tinker"]:
+    if args.len == 1 and action in ["build", "put", "tinker", "run"]:
       rest = cmdLineRest(p)
       break
 
@@ -250,11 +250,12 @@ proc main(c: Config) =
   of "put":
     writeKeyValPair(c.workspace, args[0], rest)
   of "run":
-    if args.len > 1:
-      error action & " command takes one or zero names"
-    let k = if args.len == 1: args[0] else: "_"
+    let k = if args.len >= 1: args[0] else: "_"
     try:
-      let v = getValue(c.workspace, k)
+      var v = getValue(c.workspace, k)
+      if rest.len > 0 and not rest.startsWith(' '):
+        v.add ' '
+      v.add rest
       exec v
     except IOError:
       error "no variable found: " & k
