@@ -35,11 +35,11 @@ proc prefixMatch*(p, s: string): PrefixMatch =
         else: return PrefixMatch.Substr
     inc i
   # check for abbrev:
-  if eq(s[0], p[0]):
+  if eq(s[0], p[0]) and p[0] in {'A'..'Z', '0'..'9'}:
     i = 1
     var j = 1
     while i < s.len:
-      if s[i] == '_' and i < s.len-1:
+      if s[i] in {'_', '-'} and i < s.len-1:
         if j < p.len and eq(p[j], s[i+1]): inc j
         else: return PrefixMatch.None
       if s[i] in {'A'..'Z'} and s[i-1] notin {'A'..'Z'}:
@@ -80,14 +80,15 @@ when defined(testing):
     ("abC", "foo_AB_c")
 
   check PrefixMatch.Abbrev:
-    ("abc", "AxxxBxxxCxxx")
-    ("xyz", "X_yabcZe")
+    ("ABC", "AxxxBxxxCxxx")
+    ("Xyz", "X_yabcZe")
+    ("Abc", "Axxx-bwana-clak")
 
   check PrefixMatch.None:
     ("foobar", "afkslfjd_as")
     ("xyz", "X_yuuZuuZe")
     ("ru", "remotes")
-
+    ("abc", "Axxx-bwana-clak")
 
 type
   Cand = object
@@ -98,11 +99,15 @@ type
     name, subdir: string
     parts: seq[string]
 
-proc search(path: string; k: var Keyw; results: var seq[Cand]; partsLen: int; depth=0) =
+proc search(path: string; k: var Keyw; results: var seq[Cand]; partsLen: int;
+            first: bool; depth=0) =
   for pc, f in os.walkDir(path, relative=true):
     let match = prefixMatch(k.name, f)
     if match != PrefixMatch.None and partsLen == 0:
-      results.add(Cand(m: match, d: depth, p: path / f))
+      if first and pc in {pcDir, pcLinkToDir}:
+        discard "first command line part cannot be a directory"
+      else:
+        results.add(Cand(m: match, d: depth, p: path / f))
     case pc
     of pcFile, pcLinkToFile:
       discard
@@ -110,10 +115,10 @@ proc search(path: string; k: var Keyw; results: var seq[Cand]; partsLen: int; de
       let idx = find(k.parts, f)
       if idx >= 0:
         k.parts[idx] = "" # disable for recursion
-        search(path / f, k, results, partsLen-1, depth+1)
+        search(path / f, k, results, partsLen-1, first, depth+1)
         k.parts[idx] = f
       else:
-        search(path / f, k, results, partsLen, depth+1)
+        search(path / f, k, results, partsLen, first, depth+1)
 
 proc pickBest*[T](x: openArray[T]; cmp: proc(a, b: T): int): int =
   ## add to algorithm stdlib?
@@ -145,11 +150,11 @@ proc splitKeyw(s: string): Keyw =
     result.parts.add a[i]
   result.name = a[^1]
 
-proc complete(s: string): string =
+proc complete(s: string; first: bool): string =
   if not s.endsWith("_"): return quoteShell(s)
   var cands: seq[Cand] = @[]
   var k = splitKeyw(s.substr(0, s.len-2))
-  search(k.subdir, k, cands, k.parts.len)
+  search(k.subdir, k, cands, k.parts.len, first)
   if cands.len == 0:
     quit "cannot expand: " & s
   let best = pickBest(cands, proc (a, b: Cand): int =
@@ -171,6 +176,7 @@ proc main =
   if cnt == 0:
     quit "Usage: cff [--confirm] <command to complete>"
   var i = 1
+  var w = 0
   var confirm = false
   if paramStr(1) == "--confirm":
     confirm = true
@@ -178,12 +184,14 @@ proc main =
   var cmd = ""
   while i <= cnt:
     cmd.add ' '
-    cmd.add complete(paramStr(i))
+    cmd.add complete(paramStr(i), w == 0)
     inc i
+    inc w
   if confirm:
     echo "[cff] exec: ", cmd, " (y/n?)"
     confirm = stdin.readline() == "y"
   else:
+    echo "[cff] ", cmd
     confirm = true
   if confirm:
     let exitCode = execShellCmd(cmd)
