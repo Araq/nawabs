@@ -1,4 +1,9 @@
-
+#
+#    cff -- complete the fucking filename tool
+#        (c) Copyright 2017 Andreas Rumpf
+#
+#    See the file "license.txt", included in this
+#    distribution, for details about the copyright.
 
 import os, strutils, parseutils
 from osproc import quoteShell

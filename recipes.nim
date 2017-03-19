@@ -10,6 +10,8 @@
 import os, osproc, strutils
 import osutils, packages
 
+const configDir* = "nawabs_config"
+
 proc projToKey(name: string): string =
   result = newStringOfCap(name.len)
   var pendingDash = false
@@ -69,7 +71,7 @@ proc init*(workspace: string) =
     createDir dir
     withDir dir:
       exec "git init"
-      copyFile(getAppDir() / "config" / utils & ".nim", utils & ".nim")
+      copyFile(getAppDir() / configDir / utils & ".nim", utils & ".nim")
       exec "git add " & utils & ".nim"
       exec "git commit -am \"nawabs: first commit\""
 

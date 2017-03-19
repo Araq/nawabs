@@ -203,10 +203,10 @@ proc main(c: Config) =
       error c.workspace & " is already a workspace"
     recipes.init(c.workspace)
     withDir c.workspace / recipesDirName:
-      createDir "config"
-      let roots = "config" / "roots.nims"
+      createDir configDir
+      let roots = configDir / "roots.nims"
       copyFile(getAppDir() / roots, roots)
-      copyFile(getAppDir() / "config" / nimscriptApi, nimscriptApi)
+      copyFile(getAppDir() / configDir / nimscriptApi, nimscriptApi)
     refresh(c)
   of "refresh": refresh(c)
   of "search", "list": search getPackages(c), args

@@ -30,7 +30,7 @@ proc newConfig*(): Config =
 
 proc refresh*(c: Config) =
   withDir c.workspace / recipesDirName:
-    let roots = "config" / "roots.nims"
+    let roots = configDir / "roots.nims"
     runScript(roots, c.workspace)
 
 proc getPackages*(c: Config): seq[Package] =
