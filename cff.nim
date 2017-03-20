@@ -179,11 +179,11 @@ proc complete(s: string; first: bool): string =
 proc main =
   let cnt = os.paramCount()
   if cnt == 0:
-    quit "Usage: cff [--confirm] <command to complete>"
+    quit "Usage: cff [--confirm/-c] <command to complete>"
   var i = 1
   var w = 0
   var confirm = false
-  if paramStr(1) == "--confirm":
+  if paramStr(1) in ["--confirm", "-c"]:
     confirm = true
     inc i
   var cmd = ""
