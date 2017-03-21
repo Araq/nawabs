@@ -58,6 +58,10 @@ Commands:
                                   doesn't have uncommitted changes.
     --ask                         Ask about every dependency.
 
+  task <taskname> [file.nimble]   Run the task of the nimble file.
+  tests [file.nimble]             Run the 'tests' task of the nimble file.
+  bench [file.nimble]             Run the 'bench' task of the nimble file.
+
   put           key value         Put a key value pair to the scratchpad.
   get           key               Get the value to a key back.
   run           key [args]        Get the value to a key back and run it as
@@ -123,6 +127,16 @@ proc echoPath(c: Config, a: string) =
   let p = getProject(c, a)
   echo c.workspace / p.subdir / p.name
 
+proc findNimbleFile(): string =
+  for x in walkFiles("*.nimble"):
+    if result.isNil: result = x
+    else: error "cannot determine which .nimble file to use; ambiguous"
+  if result.isNil:
+    error "cannot find a .nimble file"
+
+proc runtask(c: Config; taskname, file: string) =
+  runScript(file, c.workspace, taskname)
+
 proc main(c: Config) =
   var action = ""
   var args: seq[string] = @[]
@@ -176,7 +190,7 @@ proc main(c: Config) =
       error c.workspace & "is not a workspace"
   else:
     c.workspace = getCurrentDir()
-    if action.normalize != "init":
+    if action != "init":
       while c.workspace.len > 0 and not dirExists(c.workspace / recipesDirName):
         c.workspace = c.workspace.parentDir()
       if c.workspace.len == 0:
@@ -196,7 +210,7 @@ proc main(c: Config) =
     if args.len != 0:
       error action & " command takes no arguments"
 
-  case action.normalize
+  case action
   of "init":
     noPkg()
     if dirExists(c.workspace / recipesDirName):
@@ -259,6 +273,20 @@ proc main(c: Config) =
       error "no variable found: " & k
     except ValueError:
       error "invalid $expansions: " & k & " " & rest
+  of "task":
+    if args.len == 2:
+      runtask(c, args[0], args[1])
+    elif args.len == 1:
+      runtask(c, args[0], findNimbleFile())
+    else:
+      error "command 'task' takes 1 or 2 arguments"
+  of "tests", "bench":
+    if args.len == 1:
+      runtask(c, action, args[0])
+    elif args.len == 0:
+      runtask(c, action, findNimbleFile())
+    else:
+      error "command '" & action & "' takes 0 or 1 arguments"
   else:
     # typing in 'nawabs' with no command currently raises an error so we're
     # free to later do something more convenient here

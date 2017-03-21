@@ -109,7 +109,8 @@ proc extractRequires(ident: PSym, result: var seq[string]) =
 
 proc getNimPrefixDir(): string = splitPath(findExe("nim")).head.parentDir
 
-proc execScript(graph: ModuleGraph; cache: IdentCache; scriptName: string, workspace: string): PSym =
+proc execScript(graph: ModuleGraph; cache: IdentCache;
+                scriptName, workspace, task: string): PSym =
   ## Executes the specified script. Returns the script's module symbol.
   ##
   ## No clean up is performed and must be done manually!
@@ -118,7 +119,7 @@ proc execScript(graph: ModuleGraph; cache: IdentCache; scriptName: string, works
 
   # Ensure the compiler can find its standard library #220.
   options.gPrefixDir = getNimPrefixDir()
-  options.command = "nawabs"
+  options.command = task
 
   let pkgName = scriptName.splitFile.name
 
@@ -169,7 +170,7 @@ proc cleanup() =
 
 proc readPackageInfoFromNims*(graph: ModuleGraph; cache: IdentCache;
                               scriptName, workspace: string, result: var PackageInfo) =
-  discard execScript(graph, cache, scriptName, workspace)
+  discard execScript(graph, cache, scriptName, workspace, "nawabs")
 
   var apiModule: PSym
   for i in 0..<graph.modules.len:
@@ -327,8 +328,9 @@ proc readPackageInfo*(proj, workspace: string): PackageInfo =
   if result.isNimScript:
     readPackageInfoFromNims(newModuleGraph(), newIdentCache(), nf, workspace, result)
 
-proc runScript*(file, workspace: string) =
-  discard execScript(newModuleGraph(), newIdentCache(), file, workspace)
+proc runScript*(file, workspace: string; task="nawabs") =
+  discard execScript(newModuleGraph(), newIdentCache(),
+                    file, workspace, task)
 
 proc findMainNimFile*(dir: string): string =
   splitFile(options.findProjectNimFile(dir)).name
