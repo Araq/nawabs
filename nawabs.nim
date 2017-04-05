@@ -75,7 +75,7 @@ Options:
                                   cloning.
   --workspace:DIR                 Use DIR as the current workspace.
 """
-  Version = "1.0"
+  Version = "1.1"
 
 proc execRecipe(c: Config; proj: Project;
                 attempt = false): bool {.discardable.} =
