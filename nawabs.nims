@@ -1,1 +1,1 @@
-switch("path", "../nim")
+switch("path", "$nim")

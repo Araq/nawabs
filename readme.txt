@@ -42,6 +42,15 @@ which ends in an underscore. ``backup/c2nim`` is not part of the workspace
 because ``backup`` doesn't end in an underscore.
 
 
+Installation
+============
+
+* ``nim c -d:release nawabs.nim``
+* Copy the ``nawabs[.exe]`` binary and the ``nawabs_config``
+  directory to a directory that is in your ``PATH``. Alternatively add it to
+  your ``PATH``.
+
+
 Commands
 ========
 
