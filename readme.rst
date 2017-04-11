@@ -50,6 +50,17 @@ Installation
   directory to a directory that is in your ``PATH``. Alternatively add it to
   your ``PATH``.
 
+To build the optional nimble emulator use:
+
+* ``nim c --out:nimble[.exe] fakenimble``.
+
+
+Nimble emulation
+================
+
+Unfortunately many Nim related build tools build on top of ``nimble``. Nawabs
+comes with a helper program you can use to replace your stock ``nimble.exe``.
+
 
 Commands
 ========
@@ -87,6 +98,7 @@ universal portable shell aliases::
 The special variable "_" is set after every successful ``nawabs build`` command
 to this very build command.
 You can use ``nawabs run _`` or simply ``nawabs run`` to rerun the command.
+
 
 
 (c) 2017 Andreas Rumpf
