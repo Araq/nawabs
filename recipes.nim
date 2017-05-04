@@ -28,7 +28,7 @@ proc projToKey(name: string): string =
 proc projToKey(proj: Project): string = projToKey(proj.name)
 
 const
-  recipesDirName* = "recipes_"
+  recipesDirName* = "_recipes"
   utils = "recipe_utils"
   envDirName = "env"
 

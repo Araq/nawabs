@@ -42,6 +42,26 @@ which ends in an underscore. ``backup/c2nim`` is not part of the workspace
 because ``backup`` doesn't end in an underscore.
 
 
+Installation
+============
+
+* ``nim c -d:release nawabs.nim``
+* Copy the ``nawabs[.exe]`` binary and the ``nawabs_config``
+  directory to a directory that is in your ``PATH``. Alternatively add it to
+  your ``PATH``.
+
+To build the optional nimble emulator use:
+
+* ``nim c --out:nimble[.exe] fakenimble``.
+
+
+Nimble emulation
+================
+
+Unfortunately many Nim related build tools build on top of ``nimble``. Nawabs
+comes with a helper program you can use to replace your stock ``nimble.exe``.
+
+
 Commands
 ========
 
@@ -68,7 +88,7 @@ Scratchpad
 
 Nawabs allows to store arbitrary key/value pairs in a scratchpad that is
 version controlled, so you cannot lose data. The scratchpad is the ``env``
-subdirectory in the ``recipes_`` directory. You can use this to get
+subdirectory in the ``_recipes`` directory. You can use this to get
 universal portable shell aliases::
 
   nawabs put nimtests nim c -r tests/testament/tester.nim all
@@ -78,6 +98,7 @@ universal portable shell aliases::
 The special variable "_" is set after every successful ``nawabs build`` command
 to this very build command.
 You can use ``nawabs run _`` or simply ``nawabs run`` to rerun the command.
+
 
 
 (c) 2017 Andreas Rumpf
