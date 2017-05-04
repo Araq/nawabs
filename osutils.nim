@@ -7,7 +7,7 @@
 
 ## OS utilities like 'exec' and 'withDir'.
 
-import os, strutils, osproc
+import os, strutils, osproc, securehash
 
 proc error*(msg: string) =
   when defined(debug):
@@ -85,3 +85,32 @@ proc copyExe*(source, dest: string) =
   safeRemove(dest)
   copyFile(dest=dest, source=source)
   inclFilePermissions(dest, {fpUserExec})
+
+proc fileChanged*(file, hashdir: string): bool =
+  try:
+    var currentHash = secureHashFile(file)
+    var f: File
+    let hashFile = hashdir / $secureHash(expandFilename(file)) & ".sha1"
+    if open(f, hashFile, fmRead):
+      let oldHash = parseSecureHash(f.readLine())
+      close(f)
+      result = oldHash != currentHash
+    else:
+      result = true
+    if result:
+      if open(f, hashFile, fmWrite):
+        f.writeLine($currentHash)
+        close(f)
+  except IOError, OSError:
+    result = true
+
+template rule*(d, body: untyped) =
+  const deps {.inject.} = d
+  var change = false
+  for x in deps:
+    if fileChanged(x):
+      change = true
+      # we must not break here so that every file gets a fresh timestamp
+      # anyway
+  if change:
+    body

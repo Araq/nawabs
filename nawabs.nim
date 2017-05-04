@@ -62,6 +62,10 @@ Commands:
   tests [file.nimble]             Run the 'tests' task of the nimble file.
   bench [file.nimble]             Run the 'bench' task of the nimble file.
 
+  make [file.nim] [args]          Run 'nim c -r file.nim' or 'file.exe'.
+                                  If file.nim is missing, it
+                                  uses 'nakefile.nim'.
+
   put           key value         Put a key value pair to the scratchpad.
   get           key               Get the value to a key back.
   run           key [args]        Get the value to a key back and run it as
@@ -137,13 +141,29 @@ proc findNimbleFile(): string =
 proc runtask(c: Config; taskname, file: string) =
   runScript(file, c.workspace, taskname)
 
+proc make(c: Config; args: seq[string]) =
+  var nimfile = "nakefile.nim"
+  var start = 0
+  if args.len >= 1 and args[0].contains(".nim"):
+    nimfile = args[0]
+    start = 1
+  let exefile = changeFileExt(nimfile, ExeExt)
+  var cmd = if not exefile.fileExists or fileChanged(nimfile, c.workspace / recipesDirName):
+              "nim c -r"
+            else:
+              exefile
+  for i in start..<args.len:
+    cmd.add ' '
+    cmd.add quoteShell(args[i])
+  exec cmd
+
 proc main(c: Config) =
   var action = ""
   var args: seq[string] = @[]
   var rest = ""
 
   template handleRest() =
-    if args.len == 1 and action in ["build", "put", "tinker", "run"]:
+    if args.len == 1 and action in ["build", "put", "tinker", "run", "make"]:
       rest = cmdLineRest(p)
       break
 
@@ -287,6 +307,8 @@ proc main(c: Config) =
       runtask(c, action, findNimbleFile())
     else:
       error "command '" & action & "' takes 0 or 1 arguments"
+  of "make":
+    make(c, args)
   else:
     # typing in 'nawabs' with no command currently raises an error so we're
     # free to later do something more convenient here
