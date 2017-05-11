@@ -107,7 +107,9 @@ proc extractRequires(ident: PSym, result: var seq[string]) =
   else:
     raiseVariableError("requiresData", "seq[(string, VersionReq)]")
 
-proc getNimPrefixDir(): string = splitPath(findExe("nim")).head.parentDir
+proc getNimPrefixDir(): string =
+  result = splitPath(findExe("nim")).head.parentDir
+  if not dirExists(result / "lib"): result = ""
 
 const nawabsDefines = ["nimscript", "nimconfig", "nimble", "nawabs"]
 
