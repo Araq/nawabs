@@ -10,7 +10,7 @@ import
   condsyms, sem, semdata,
   llstream, vm, vmdef, commands,
   msgs, magicsys, idents,
-  nimconf, modulegraphs, options, scriptconfig]
+  nimconf, modulegraphs, options, scriptconfig, main]
 
 from compiler/scriptconfig import setupVM
 from compiler/astalgo import strTableGet
@@ -109,6 +109,8 @@ proc extractRequires(ident: PSym, result: var seq[string]) =
 
 proc getNimPrefixDir(): string = splitPath(findExe("nim")).head.parentDir
 
+const nawabsDefines = ["nimscript", "nimconfig", "nimble", "nawabs"]
+
 proc execScript(graph: ModuleGraph; cache: IdentCache;
                 scriptName, workspace, task: string): PSym =
   ## Executes the specified script. Returns the script's module symbol.
@@ -131,10 +133,8 @@ proc execScript(graph: ModuleGraph; cache: IdentCache;
   passes.gIncludeFile = includeModule
   passes.gImportModule = importModule
 
-  defineSymbol("nimscript")
-  defineSymbol("nimconfig")
-  defineSymbol("nimble")
-  defineSymbol("nawabs")
+  for d in nawabsDefines:
+    defineSymbol(d)
   registerPass(semPass)
   registerPass(evalPass)
 
@@ -328,9 +328,17 @@ proc readPackageInfo*(proj, workspace: string): PackageInfo =
   if result.isNimScript:
     readPackageInfoFromNims(newModuleGraph(), newIdentCache(), nf, workspace, result)
 
-proc runScript*(file, workspace: string; task="nawabs") =
-  discard execScript(newModuleGraph(), newIdentCache(),
+proc runScript*(file, workspace: string; task="nawabs"; allowSetCommand=false) =
+  let cache = newIdentCache()
+  let config = newConfigRef()
+  discard execScript(newModuleGraph(config), cache,
                     file, workspace, task)
+  if allowSetCommand and options.command != task:
+    resetSystemArtifacts()
+    clearPasses()
+    for d in nawabsDefines:
+      undefSymbol(d)
+    mainCommand(newModuleGraph(config), cache)
 
 proc findMainNimFile*(dir: string): string =
   splitFile(options.findProjectNimFile(dir)).name

@@ -139,7 +139,7 @@ proc findNimbleFile(): string =
     error "cannot find a .nimble file"
 
 proc runtask(c: Config; taskname, file: string) =
-  runScript(file, c.workspace, taskname)
+  runScript(file, c.workspace, taskname, allowSetCommand=true)
 
 proc make(c: Config; args: seq[string]) =
   var nimfile = "nakefile.nim"
