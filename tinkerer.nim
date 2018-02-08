@@ -43,7 +43,7 @@ proc getPackages*(c: Config): seq[Package] =
       let packages = json.parseFile(path)
       for p in packages:
         let pkg = p.fromJson()
-        if pkg.name notin namesAdded:
+        if pkg != nil and pkg.name notin namesAdded:
           result.add(pkg)
           namesAdded.incl(pkg.name)
   if jsonFiles == 0 and not c.refreshed:

@@ -50,17 +50,20 @@ proc optionalField(obj: JsonNode, name: string, default = ""): string =
 
 proc requiredField(obj: JsonNode, name: string): string =
   result = optionalField(obj, name, nil)
-  if result == nil:
-    error("Package in packages.json file does not contain a " & name & " field.")
+  #if result == nil:
+  #error("Package in packages.json file does not contain a " & name & " field.")
 
 proc fromJson*(obj: JSonNode): Package =
   new result
   result.name = obj.requiredField("name")
+  if result.name.isNil: return nil
   result.version = obj.optionalField("version")
   result.url = obj.requiredField("url")
+  if result.url.isNil: return nil
   result.downloadMethod = obj.requiredField("method")
+  if result.downloadMethod.isNil: return nil
   result.dvcsTag = obj.optionalField("dvcs-tag")
-  result.license = obj.requiredField("license")
+  result.license = obj.optionalField("license")
   result.tags = @[]
   for t in obj["tags"]:
     result.tags.add(t.str)
