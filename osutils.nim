@@ -7,7 +7,7 @@
 
 ## OS utilities like 'exec' and 'withDir'.
 
-import os, strutils, osproc, securehash
+import os, strutils, osproc, std / sha1
 
 proc error*(msg: string) =
   when defined(debug):

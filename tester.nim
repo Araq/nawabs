@@ -15,7 +15,14 @@ template withWs(ws, body) =
     body
   removeDir(ws)
 
-proc naw(s: string) = exec "../nawabs " & s
+proc naw(s: string) =
+  # we go up one directory here as the 'withWs' environment goes down
+  # into a testing workspace.
+  when defined(windows):
+    let n = getCurrentDir() /../ "nawabs.exe"
+    exec quoteShell(n) & " " & s
+  else:
+    exec "../nawabs " & s
 
 proc test1 =
   withWs "testws":

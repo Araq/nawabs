@@ -48,15 +48,15 @@ proc raiseVariableError(ident, typ: string) {.noinline.} =
 
 proc isStrLit(n: PNode): bool = n.kind in {nkStrLit..nkTripleStrLit}
 
-proc getGlobal(ident: PSym): string =
-  let n = vm.globalCtx.getGlobalValue(ident)
+proc getGlobal(g: ModuleGraph; ident: PSym): string =
+  let n = vm.getGlobalValue(PCtx g.vm, ident)
   if n.isStrLit:
     result = if n.strVal.isNil: "" else: n.strVal
   else:
     raiseVariableError(ident.name.s, "string")
 
-proc getGlobalAsSeq(ident: PSym): seq[string] =
-  let n = vm.globalCtx.getGlobalValue(ident)
+proc getGlobalAsSeq(g: ModuleGraph; ident: PSym): seq[string] =
+  let n = vm.getGlobalValue(PCtx g.vm, ident)
   result = @[]
   if n.kind == nkBracket:
     for x in n:
@@ -73,12 +73,12 @@ proc token(s: string; idx: int; lit: var string): int =
   while s[i] in Whitespace: inc(i)
   lit.setLen 0
   if s[i] in Letters:
-    while i < s.len and s[i] notin Whitespace:
+    while i < s.len and s[i] notin Whitespace and s[i] != '#':
       lit.add s[i]
       inc i
   elif s[i] == '"':
     inc i
-    while i < s.len and s[i] != '"':
+    while i < s.len and s[i] != '"' and s[i] != '#':
       lit.add s[i]
       inc i
     inc i
@@ -94,8 +94,8 @@ proc parseRequires(s: string): string =
 proc addDep(result: var seq[string]; dep: string) =
   if dep notin ["nim", "nimrod"]: result.add dep
 
-proc extractRequires(ident: PSym, result: var seq[string]) =
-  let n = vm.globalCtx.getGlobalValue(ident)
+proc extractRequires(g: ModuleGraph; ident: PSym, result: var seq[string]) =
+  let n = vm.getGlobalValue(PCtx g.vm, ident)
   if n.kind == nkBracket:
     for x in n:
       if x.kind == nkPar and x.len == 2 and x[0].isStrLit and x[1].isStrLit:
@@ -113,66 +113,66 @@ proc getNimPrefixDir(): string =
 
 const nawabsDefines = ["nimscript", "nimconfig", "nimble", "nawabs"]
 
-proc execScript(graph: ModuleGraph; cache: IdentCache;
+proc execScript(graph: ModuleGraph;
                 scriptName, workspace, task: string): PSym =
   ## Executes the specified script. Returns the script's module symbol.
   ##
   ## No clean up is performed and must be done manually!
-  if "nimscriptapi" notin options.implicitImports:
-    options.implicitImports.add("nimscriptapi")
+  let config = graph.config
+  if "nimscriptapi" notin config.implicitImports:
+    config.implicitImports.add("nimscriptapi")
 
   # Ensure the compiler can find its standard library #220.
-  options.gPrefixDir = getNimPrefixDir()
-  options.command = task
+  config.prefixDir = getNimPrefixDir()
+  config.command = task
 
   let pkgName = scriptName.splitFile.name
 
   # Ensure that "nimscriptapi" is in the PATH.
-  searchPaths.add workspace / recipesDirName
+  config.searchPaths.add workspace / recipesDirName
 
-  initDefines()
-  loadConfigs(DefaultConfig)
-  passes.gIncludeFile = includeModule
-  passes.gImportModule = importModule
+  initDefines(config.symbols)
+  loadConfigs(DefaultConfig, graph.cache, graph.config)
 
   for d in nawabsDefines:
-    defineSymbol(d)
-  registerPass(semPass)
-  registerPass(evalPass)
+    defineSymbol(config.symbols, d)
+  registerPass(graph, semPass)
+  registerPass(graph, evalPass)
 
-  add(searchPaths, options.libpath)
+  add(config.searchPaths, config.libpath)
 
   result = graph.makeModule(scriptName)
 
   incl(result.flags, sfMainModule)
-  vm.globalCtx = setupVM(result, cache, scriptName, graph.config)
+  graph.vm = setupVM(result, graph.cache, scriptName, graph)
 
   # Setup builtins defined in nimscriptapi.nim
   template cbApi(name, body) {.dirty.} =
-    vm.globalCtx.registerCallback pkgName & "." & astToStr(name),
+    PCtx(graph.vm).registerCallback pkgName & "." & astToStr(name),
       proc (a: VmArgs) =
         body
 
   cbApi getPkgDir:
     setResult(a, scriptName.splitFile.dir)
 
-  graph.compileSystemModule(cache)
-  graph.processModule(result, llStreamOpen(scriptName, fmRead), nil, cache)
+  graph.compileSystemModule()
+  graph.processModule(result, llStreamOpen(scriptName, fmRead))
 
-proc cleanup() =
+proc cleanup(graph: ModuleGraph) =
   # ensure everything can be called again:
-  options.gProjectName = ""
-  options.command = ""
-  resetSystemArtifacts()
-  clearPasses()
-  msgs.gErrorMax = 1
-  msgs.writeLnHook = nil
-  vm.globalCtx = nil
-  initDefines()
+  let config = graph.config
+  config.projectName = ""
+  config.command = ""
+  resetSystemArtifacts(graph)
+  clearPasses(graph)
+  config.errorMax = 1
+  config.writeLnHook = nil
+  graph.vm = nil
+  initDefines(config.symbols)
 
-proc readPackageInfoFromNims*(graph: ModuleGraph; cache: IdentCache;
+proc readPackageInfoFromNims*(graph: ModuleGraph;
                               scriptName, workspace: string, result: var PackageInfo) =
-  discard execScript(graph, cache, scriptName, workspace, "nawabs")
+  discard execScript(graph, scriptName, workspace, "nawabs")
 
   var apiModule: PSym
   for i in 0..<graph.modules.len:
@@ -184,18 +184,18 @@ proc readPackageInfoFromNims*(graph: ModuleGraph; cache: IdentCache;
 
   # Extract all the necessary fields populated by the nimscript file.
   proc getSym(apiModule: PSym, ident: string): PSym =
-    result = apiModule.tab.strTableGet(getIdent(ident))
+    result = apiModule.tab.strTableGet(getIdent(graph.cache, ident))
     if result.isNil:
       raise newException(ValueError, "Ident not found: " & ident)
 
   template trivialField(field) =
-    result.field = getGlobal(getSym(apiModule, astToStr field))
+    result.field = getGlobal(graph, getSym(apiModule, astToStr field))
 
   template trivialFieldSeq(field) =
-    result.field.add getGlobalAsSeq(getSym(apiModule, astToStr field))
+    result.field.add getGlobalAsSeq(graph, getSym(apiModule, astToStr field))
 
   # keep reasonable default:
-  let name = getGlobal(apiModule.tab.strTableGet(getIdent"packageName"))
+  let name = getGlobal(graph, apiModule.tab.strTableGet(getIdent(graph.cache, "packageName")))
   if name.len > 0: result.name = name
 
   trivialField srcdir
@@ -208,20 +208,20 @@ proc readPackageInfoFromNims*(graph: ModuleGraph; cache: IdentCache;
   trivialFieldSeq installExt
   trivialFieldSeq foreignDeps
 
-  extractRequires(getSym(apiModule, "requiresData"), result.requires)
+  extractRequires(graph, getSym(apiModule, "requiresData"), result.requires)
 
-  let binSeq = getGlobalAsSeq(getSym(apiModule, "bin"))
+  let binSeq = getGlobalAsSeq(graph, getSym(apiModule, "bin"))
   for i in binSeq:
     result.bin.add(i.addFileExt(ExeExt))
 
-  let backend = getGlobal(getSym(apiModule, "backend"))
+  let backend = getGlobal(graph, getSym(apiModule, "backend"))
   if backend.len == 0:
     result.backend = "c"
   elif cmpIgnoreStyle(backend, "javascript") == 0:
     result.backend = "js"
   else:
     result.backend = backend.toLowerAscii
-  cleanup()
+  cleanup(graph)
 
 proc multiSplit(s: string): seq[string] =
   ## Returns ``s`` split by newline and comma characters.
@@ -328,19 +328,19 @@ proc readPackageInfo*(proj, workspace: string): PackageInfo =
 
   readPackageInfoFromNimble(nf, result)
   if result.isNimScript:
-    readPackageInfoFromNims(newModuleGraph(), newIdentCache(), nf, workspace, result)
+    readPackageInfoFromNims(newModuleGraph(newIdentCache(), newConfigRef()), nf, workspace, result)
 
 proc runScript*(file, workspace: string; task="nawabs"; allowSetCommand=false) =
   let cache = newIdentCache()
   let config = newConfigRef()
-  discard execScript(newModuleGraph(config), cache,
-                    file, workspace, task)
-  if allowSetCommand and options.command != task:
-    resetSystemArtifacts()
-    clearPasses()
+  var g = newModuleGraph(cache, config)
+  discard execScript(g, file, workspace, task)
+  if allowSetCommand and config.command != task:
+    resetSystemArtifacts(g)
+    clearPasses(g)
     for d in nawabsDefines:
-      undefSymbol(d)
-    mainCommand(newModuleGraph(config), cache)
+      undefSymbol(config.symbols, d)
+    mainCommand(newModuleGraph(cache, config))
 
-proc findMainNimFile*(dir: string): string =
-  splitFile(options.findProjectNimFile(dir)).name
+proc findMainNimFile*(conf: ConfigRef; dir: string): string =
+  splitFile(options.findProjectNimFile(conf, dir)).name

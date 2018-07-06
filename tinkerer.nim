@@ -15,6 +15,9 @@ from unicode import toLower, cmpRunesIgnoreCase
 from osproc import quoteShell, execCmdEx
 import osutils, packages, recipes, callnim, nimscriptsupport
 
+import
+  compiler / [options]
+
 type
   DepsSetting* = enum
     normalDeps, noDeps, onlyDeps, askDeps
@@ -24,9 +27,10 @@ type
     nimExe*: string
     workspace*, deps*: string
     foreignDeps*: seq[string]
+    nimconfig: ConfigRef
 
 proc newConfig*(): Config =
-  Config(nimExe: "nim", foreignDeps: @[])
+  Config(nimExe: "nim", foreignDeps: @[], nimconfig: newConfigRef())
 
 proc refresh*(c: Config) =
   withDir c.workspace / recipesDirName:
@@ -198,7 +202,7 @@ proc buildCmd*(c: Config; pkgList: seq[Package]; package: string; result: var st
   if rec == 0:
     if not onlyDeps:
       let pp = proj.toPath
-      let nimfile = findMainNimFile(pp)
+      let nimfile = findMainNimFile(c.nimconfig, pp)
       if nimfile.len == 0:
         error "Cannot determine main nim file for: " & pp
       result.add " "
@@ -296,7 +300,7 @@ proc tinkerPkg*(c: Config; pkgList: seq[Package]; pkg: string) =
   if proj.name.len == 0:
     discard cloneRec(c, pkgList, pkg)
     proj = Project(name: pkg, subdir: getCurrentDir())
-  let nimfile = findMainNimFile(proj.toPath)
+  let nimfile = findMainNimFile(c.nimconfig, proj.toPath)
   if nimfile.len == 0:
     error "Cannot determine tinker command. Try 'nawabs tinker " & pkg & " c example'"
 
