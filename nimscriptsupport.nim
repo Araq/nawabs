@@ -98,7 +98,7 @@ proc extractRequires(g: ModuleGraph; ident: PSym, result: var seq[string]) =
   let n = vm.getGlobalValue(PCtx g.vm, ident)
   if n.kind == nkBracket:
     for x in n:
-      if x.kind == nkPar and x.len == 2 and x[0].isStrLit and x[1].isStrLit:
+      if x.kind in {nkPar, nkTupleConstr} and x.len == 2 and x[0].isStrLit and x[1].isStrLit:
         result.addDep(x[0].strVal)
       elif x.isStrLit:
         result.addDep(parseRequires(x.strVal))
