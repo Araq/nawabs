@@ -51,7 +51,7 @@ proc isStrLit(n: PNode): bool = n.kind in {nkStrLit..nkTripleStrLit}
 proc getGlobal(g: ModuleGraph; ident: PSym): string =
   let n = vm.getGlobalValue(PCtx g.vm, ident)
   if n.isStrLit:
-    result = if n.strVal.isNil: "" else: n.strVal
+    result = n.strVal
   else:
     raiseVariableError(ident.name.s, "string")
 

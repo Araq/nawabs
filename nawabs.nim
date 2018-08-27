@@ -133,9 +133,9 @@ proc echoPath(c: Config, a: string) =
 
 proc findNimbleFile(): string =
   for x in walkFiles("*.nimble"):
-    if result.isNil: result = x
+    if result.len == 0: result = x
     else: error "cannot determine which .nimble file to use; ambiguous"
-  if result.isNil:
+  if result.len == 0:
     error "cannot find a .nimble file"
 
 proc runtask(c: Config; taskname, file: string) =

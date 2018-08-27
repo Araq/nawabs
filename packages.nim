@@ -49,19 +49,19 @@ proc optionalField(obj: JsonNode, name: string, default = ""): string =
     return default
 
 proc requiredField(obj: JsonNode, name: string): string =
-  result = optionalField(obj, name, nil)
+  result = optionalField(obj, name, "")
   #if result == nil:
   #error("Package in packages.json file does not contain a " & name & " field.")
 
 proc fromJson*(obj: JSonNode): Package =
   new result
   result.name = obj.requiredField("name")
-  if result.name.isNil: return nil
+  if result.name.len == 0: return nil
   result.version = obj.optionalField("version")
   result.url = obj.requiredField("url")
-  if result.url.isNil: return nil
+  if result.url.len == 0: return nil
   result.downloadMethod = obj.requiredField("method")
-  if result.downloadMethod.isNil: return nil
+  if result.downloadMethod.len == 0: return nil
   result.dvcsTag = obj.optionalField("dvcs-tag")
   result.license = obj.optionalField("license")
   result.tags = @[]

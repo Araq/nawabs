@@ -95,11 +95,10 @@ proc installDep(c: Config; p: Package): Project =
 
 proc findProj*(path: string; p: string): Project =
   # ensure that 'foo_/bar' takes precedence over 'sub/dir_/bar':
-  var subdirs: seq[string]
+  var subdirs: seq[string] = @[]
   for k, dir in os.walkDir(path, relative=true):
     if k == pcDir and dir != recipesDirName:
       if dir.endsWith("_"):
-        if subdirs.isNil: subdirs = @[]
         subdirs.add dir
       if cmpRunesIgnoreCase(p, dir) == 0:
         return Project(name: dir, subdir: path)
