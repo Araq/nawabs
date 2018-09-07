@@ -10,7 +10,8 @@ import
   condsyms, sem, semdata,
   llstream, vm, vmdef, commands,
   msgs, magicsys, idents,
-  nimconf, modulegraphs, options, scriptconfig, main]
+  nimconf, modulegraphs, options, scriptconfig, main,
+  pathutils]
 
 from compiler/scriptconfig import setupVM
 from compiler/astalgo import strTableGet
@@ -123,13 +124,13 @@ proc execScript(graph: ModuleGraph;
     config.implicitImports.add("nimscriptapi")
 
   # Ensure the compiler can find its standard library #220.
-  config.prefixDir = getNimPrefixDir()
+  config.prefixDir = AbsoluteDir getNimPrefixDir()
   config.command = task
 
   let pkgName = scriptName.splitFile.name
 
   # Ensure that "nimscriptapi" is in the PATH.
-  config.searchPaths.add workspace / recipesDirName
+  config.searchPaths.add AbsoluteDir(workspace / recipesDirName)
 
   initDefines(config.symbols)
   loadConfigs(DefaultConfig, graph.cache, graph.config)
@@ -156,7 +157,7 @@ proc execScript(graph: ModuleGraph;
     setResult(a, scriptName.splitFile.dir)
 
   graph.compileSystemModule()
-  graph.processModule(result, llStreamOpen(scriptName, fmRead))
+  graph.processModule(result, llStreamOpen(AbsoluteFile scriptName, fmRead))
 
 proc cleanup(graph: ModuleGraph) =
   # ensure everything can be called again:
