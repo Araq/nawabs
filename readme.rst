@@ -82,23 +82,3 @@ Commands
 
 For a complete list of commands, run ``nawabs --help``.
 
-
-Scratchpad
-==========
-
-Nawabs allows to store arbitrary key/value pairs in a scratchpad that is
-version controlled, so you cannot lose data. The scratchpad is the ``env``
-subdirectory in the ``_recipes`` directory. You can use this to get
-universal portable shell aliases::
-
-  nawabs put nimtests nim c -r tests/testament/tester.nim all
-  nawabs get nimtests
-  nawabs run nimtests [optional further args to command]
-
-The special variable "_" is set after every successful ``nawabs build`` command
-to this very build command.
-You can use ``nawabs run _`` or simply ``nawabs run`` to rerun the command.
-
-
-
-(c) 2017 Andreas Rumpf
