@@ -1,6 +1,6 @@
 # Utilities for recipe files.
 
-import ospaths
+from os import `/`
 
 template withDir*(dir, body) =
   let oldDir = getCurrentDir()
