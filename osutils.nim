@@ -7,7 +7,7 @@
 
 ## OS utilities like 'exec' and 'withDir'.
 
-import os, strutils, osproc, std / sha1
+import os, strutils, osproc, std/sha1
 
 proc error*(msg: string) =
   when defined(debug):
@@ -79,7 +79,7 @@ proc tryExec*(cmd: string): bool =
   result = execShellCmd(cmd) == 0
 
 proc safeRemove*(filename: string) =
-  if existsFile(filename): removeFile(filename)
+  if fileExists(filename): removeFile(filename)
 
 proc copyExe*(source, dest: string) =
   safeRemove(dest)

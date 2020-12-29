@@ -5,11 +5,9 @@
 #    See the file "license.txt", included in this
 #    distribution, for details about the copyright.
 
-import strutils except toLower
-from unicode import toLower
-import os, json, parseopt
+import strutils, os, json, parseopt
 from osproc import quoteShell
-import osutils, recipes, callnim, packages, tinkerer, nimscriptsupport
+import osutils, recipes, packages, tinkerer, nimscriptsupport
 
 const
   Help = """
@@ -146,11 +144,11 @@ proc make(c: Config; args: seq[string]) =
   var start = 0
   if args.len >= 1 and args[0].contains(".nim"):
     nimfile = args[0]
-    start = 1
   let exefile = changeFileExt(nimfile, ExeExt)
   var cmd = if not exefile.fileExists or fileChanged(nimfile, c.workspace / recipesDirName):
               "nim c -r"
             else:
+              start = 1
               exefile
   for i in start..<args.len:
     cmd.add ' '
