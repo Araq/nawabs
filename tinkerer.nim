@@ -39,7 +39,7 @@ proc refresh*(c: Config) =
 
 proc getPackages*(c: Config): seq[Package] =
   result = @[]
-  var namesAdded = initSet[string]()
+  var namesAdded = initHashSet[string]()
   var jsonFiles = 0
   for kind, path in walkDir(c.workspace / recipesDirName / "packages"):
     if kind == pcFile and path.endsWith(".json"):
@@ -229,7 +229,7 @@ proc selectCandidate(conf: Config; c: PkgCandidates): Package =
             if choice < 1 or choice > c[i].len:
               raise newException(ValueError, "out of range")
             return c[i][choice-1]
-          except ValueError, OverflowError:
+          except ValueError, OverflowDefect:
             echo "Please type in 'abort' or a number in the range 1..", c[i].len
 
 proc findSrcPaths(path, file: string; results: var seq[string]) =

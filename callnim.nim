@@ -8,7 +8,6 @@
 ## This module calls Nim and decides what to do next.
 
 import strutils, os, osproc, streams, pegs
-import osutils
 
 let
   pegLineError =

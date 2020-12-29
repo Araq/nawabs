@@ -6,10 +6,10 @@
 #    distribution, for details about the copyright.
 
 import
-  compiler / [ast, modules, passes, passaux,
-  condsyms, sem, semdata,
-  llstream, vm, vmdef, commands,
-  msgs, magicsys, idents,
+  compiler / [ast, modules, passes,
+  condsyms, sem,
+  llstream, vm, vmdef,
+  idents,
   nimconf, modulegraphs, options, scriptconfig, main,
   pathutils]
 
@@ -18,7 +18,7 @@ from compiler/astalgo import strTableGet
 from recipes import recipesDirName
 
 import parsecfg
-import os, strutils, strtabs, tables, times, osproc, streams
+import os, strutils, tables, streams
 
 type
   PackageInfo* = object
@@ -133,19 +133,19 @@ proc execScript(graph: ModuleGraph;
   config.searchPaths.add AbsoluteDir(workspace / recipesDirName)
 
   initDefines(config.symbols)
-  loadConfigs(DefaultConfig, graph.cache, graph.config)
+  loadConfigs(DefaultConfig, graph.cache, graph.config, graph.idgen)
 
   for d in nawabsDefines:
     defineSymbol(config.symbols, d)
   registerPass(graph, semPass)
   registerPass(graph, evalPass)
 
-  add(config.searchPaths, config.libpath)
+  config.searchPaths.add(config.libpath)
 
   result = graph.makeModule(scriptName)
-
-  incl(result.flags, sfMainModule)
-  graph.vm = setupVM(result, graph.cache, scriptName, graph)
+  result.flags.incl(sfMainModule)
+  var idgen = idGeneratorFromModule(result)
+  graph.vm = setupVM(result, graph.cache, scriptName, graph, idgen)
 
   # Setup builtins defined in nimscriptapi.nim
   template cbApi(name, body) {.dirty.} =
@@ -157,7 +157,7 @@ proc execScript(graph: ModuleGraph;
     setResult(a, scriptName.splitFile.dir)
 
   graph.compileSystemModule()
-  graph.processModule(result, llStreamOpen(AbsoluteFile scriptName, fmRead))
+  graph.processModule(result, idgen, llStreamOpen(AbsoluteFile scriptName, fmRead))
 
 proc cleanup(graph: ModuleGraph) =
   # ensure everything can be called again:
