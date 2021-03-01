@@ -5,15 +5,13 @@
 #    See the file "license.txt", included in this
 #    distribution, for details about the copyright.
 
-## This module implements the "tinkering" algorithm. It's still pretty basic
-## but it tries to mimic how a programmer would approach this problem.
-## Oh, there is also a traditional build command.
+## This module implements the traditional build command.
 
 import json, os, sets
 import strutils except toLower
 from unicode import toLower, cmpRunesIgnoreCase
 from osproc import quoteShell, execCmdEx
-import osutils, packages, recipes, callnim, nimscriptsupport
+import osutils, packages, recipes, nimscriptsupport
 
 import
   compiler / [options]
@@ -210,99 +208,3 @@ proc buildCmd*(c: Config; pkgList: seq[Package]; package: string; result: var st
     result.add " --path:"
     result.add quoteShell(proj.toPath)
     deps.add proj.toPath
-
-proc selectCandidate(conf: Config; c: PkgCandidates): Package =
-  for i in low(c)..high(c):
-    if c[i].len == 1: return c[i][0]
-    if c[i].len != 0:
-      echo "These all match: "
-      for x in c[i]: echo x.url
-      if conf.noquestions:
-        error "Ambiguous package request"
-      else:
-        echo "Which one to use? [1..", c[i].len, "|abort] "
-        while true:
-          let inp = stdin.readLine()
-          if inp == "abort": return nil
-          try:
-            let choice = parseInt(inp)
-            if choice < 1 or choice > c[i].len:
-              raise newException(ValueError, "out of range")
-            return c[i][choice-1]
-          except ValueError, OverflowDefect:
-            echo "Please type in 'abort' or a number in the range 1..", c[i].len
-
-proc findSrcPaths(path, file: string; results: var seq[string]) =
-  for k, f in os.walkDir(path, relative=true):
-    case k
-    of pcFile, pcLinkToFile:
-      if cmpPaths(f, file) == 0: results.add path
-    of pcDir, pcLinkToDir:
-      findSrcPaths(path / f, file, results)
-
-proc selectSrcPath(candidates: seq[string]): string =
-  doAssert candidates.len > 0
-  var m = high(int)
-  for c in candidates:
-    if c.len < m:
-      m = c.len
-      result = c
-
-proc tinker(c: Config; pkgList: seq[Package]; pkg, args: string) =
-  const maxIters = 300
-  var path: seq[string] = @[]
-  var todo: Action
-  let proj = findProj(c.workspace, pkg)
-  if proj.name.len == 0:
-    error "cannot find package: " & pkg
-  withDir proj.toPath:
-    for i in 1..maxIters:
-      todo = callCompiler(c.nimExe, args, path)
-      case todo.k
-      of Success:
-        echo "Build Successful."
-        let cmd = toNimCommand(c.nimExe, args, path)
-        if not c.norecipes:
-          writeRecipe(c.workspace, proj, cmd, path)
-        writeKeyValPair(c.workspace, "_", cmd)
-        quit 0
-      of Failure:
-        error "Hard failure. Don't know how to proceed.\n" & todo.file &
-          "\nLast command that was tried: \n" & toNimCommand(c.nimExe, args, path)
-      of FileMissing:
-        let terms = todo.file.changeFileExt("").split({'\\','/'})
-        var dep = findProj(c.workspace, splitFile(todo.file).name)
-        var p: Package = nil
-        if dep.name.len == 0:
-          p = selectCandidate(c, determineCandidates(pkgList, terms))
-          if p == nil:
-            error "No package found that could be missing for: " & todo.file
-          dep = findProj(c.workspace, p.name)
-          if dep.name.len == 0:
-            dep = installDep(c, p)
-            if dep.name.len == 0: error "Aborted."
-        doAssert dep.name.len > 0
-        var srcPaths: seq[string] = @[]
-        findSrcPaths(dep.toPath, todo.file.addFileExt(".nim"), srcPaths)
-        if srcPaths.len == 0: srcPaths.add dep.toPath
-        let srcPath = selectSrcPath(srcPaths)
-        if path.contains(srcPath):
-          error "Package already in --path and yet compilation failed: " & p.name
-        path.add srcPath
-  error "Stopped unsuccessfully after " & $maxIters & " iterations."
-
-proc tinkerCmd*(c: Config; pkgList: seq[Package]; pkg, args: string) =
-  tinker(c, pkgList, pkg, args)
-
-proc tinkerPkg*(c: Config; pkgList: seq[Package]; pkg: string) =
-  var proj = findProj(c.workspace, pkg)
-  if proj.name.len == 0:
-    discard cloneRec(c, pkgList, pkg)
-    proj = Project(name: pkg, subdir: getCurrentDir())
-  let nimfile = findMainNimFile(c.nimconfig, proj.toPath)
-  if nimfile.len == 0:
-    error "Cannot determine tinker command. Try 'nawabs tinker " & pkg & " c example'"
-
-  let info = readPackageInfo(proj.toPath, c.workspace)
-  let cmd = if info.backend.len > 0: info.backend else: "c"
-  tinker(c, pkgList, pkg, cmd & " " & nimfile)
