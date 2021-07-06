@@ -14,7 +14,6 @@ import
   pathutils]
 
 from compiler/scriptconfig import setupVM
-from compiler/astalgo import strTableGet
 from recipes import recipesDirName
 
 import parsecfg
@@ -176,27 +175,32 @@ proc readPackageInfoFromNims*(graph: ModuleGraph;
   discard execScript(graph, scriptName, workspace, "nawabs")
 
   var apiModule: PSym
-  for i in 0..<graph.modules.len:
-    if graph.modules[i] != nil and
-        graph.modules[i].name.s == "nimscriptapi":
-      apiModule = graph.modules[i]
+  for i in 0..<graph.ifaces.len:
+    if graph.ifaces[i].module != nil and
+        graph.ifaces[i].module.name.s == "nimscriptapi":
+      apiModule = graph.ifaces[i].module
       break
   doAssert apiModule != nil
 
   # Extract all the necessary fields populated by the nimscript file.
-  proc getSym(apiModule: PSym, ident: string): PSym =
-    result = apiModule.tab.strTableGet(getIdent(graph.cache, ident))
+  proc getSym(g: ModuleGraph; apiModule: PSym, ident: string): PSym =
+    result = someSym(g, apiModule, getIdent(graph.cache, ident))
     if result.isNil:
       raise newException(ValueError, "Ident not found: " & ident)
 
+  proc getSym(g: ModuleGraph; apiModule: PSym, ident: PIdent): PSym =
+    result = someSym(g, apiModule, ident)
+    if result.isNil:
+      raise newException(ValueError, "Ident not found: " & ident.s)
+
   template trivialField(field) =
-    result.field = getGlobal(graph, getSym(apiModule, astToStr field))
+    result.field = getGlobal(graph, getSym(graph, apiModule, astToStr field))
 
   template trivialFieldSeq(field) =
-    result.field.add getGlobalAsSeq(graph, getSym(apiModule, astToStr field))
+    result.field.add getGlobalAsSeq(graph, getSym(graph, apiModule, astToStr field))
 
   # keep reasonable default:
-  let name = getGlobal(graph, apiModule.tab.strTableGet(getIdent(graph.cache, "packageName")))
+  let name = getGlobal(graph, getSym(graph, apiModule, getIdent(graph.cache, "packageName")))
   if name.len > 0: result.name = name
 
   trivialField srcdir
@@ -209,13 +213,13 @@ proc readPackageInfoFromNims*(graph: ModuleGraph;
   trivialFieldSeq installExt
   trivialFieldSeq foreignDeps
 
-  extractRequires(graph, getSym(apiModule, "requiresData"), result.requires)
+  extractRequires(graph, getSym(graph, apiModule, "requiresData"), result.requires)
 
-  let binSeq = getGlobalAsSeq(graph, getSym(apiModule, "bin"))
+  let binSeq = getGlobalAsSeq(graph, getSym(graph, apiModule, "bin"))
   for i in binSeq:
     result.bin.add(i.addFileExt(ExeExt))
 
-  let backend = getGlobal(graph, getSym(apiModule, "backend"))
+  let backend = getGlobal(graph, getSym(graph, apiModule, "backend"))
   if backend.len == 0:
     result.backend = "c"
   elif cmpIgnoreStyle(backend, "javascript") == 0:

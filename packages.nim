@@ -22,7 +22,7 @@ type
     license*: string
     downloadMethod*: string
     description*: string
-    tags*: seq[string] # Even if empty, always a valid non nil seq. \
+    tags*: seq[string]
     # From here on, optional fields set to the empty string if not available.
     version*: string
     dvcsTag*: string

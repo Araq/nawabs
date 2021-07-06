@@ -1,6 +1,6 @@
 #
 #    Nawabs -- The Anti package manager for Nim
-#        (c) Copyright 2017 Andreas Rumpf
+#        (c) Copyright 2021 Andreas Rumpf
 #
 #    See the file "license.txt", included in this
 #    distribution, for details about the copyright.
@@ -41,8 +41,6 @@ Commands:
 
   pinned        pkg               Use the recipe to get a reproducible build.
 
-  tinker pkg [args]               Build the package via tinkering. Experimental,
-                                  do not complain if it fails.
   path pkg-list                   Show absolute paths to the installed packages
                                   specified.
   deps pkg                        Show required ``--path:xyz`` command line to
@@ -60,15 +58,6 @@ Commands:
   tests [file.nimble]             Run the 'tests' task of the nimble file.
   bench [file.nimble]             Run the 'bench' task of the nimble file.
 
-  make [file.nim] [args]          Run 'nim c -r file.nim' or 'file.exe'.
-                                  If file.nim is missing, it
-                                  uses 'nakefile.nim'.
-
-  put           key value         Put a key value pair to the scratchpad.
-  get           key               Get the value to a key back.
-  run           key [args]        Get the value to a key back and run it as
-                                  a command.
-
 Options:
   -h, --help                      Print this help message.
   -v, --version                   Print version information.
@@ -77,7 +66,7 @@ Options:
                                   cloning.
   --workspace:DIR                 Use DIR as the current workspace.
 """
-  Version = "1.1"
+  Version = "2.0"
 
 proc execRecipe(c: Config; proj: Project;
                 attempt = false): bool {.discardable.} =
@@ -139,29 +128,13 @@ proc findNimbleFile(): string =
 proc runtask(c: Config; taskname, file: string) =
   runScript(file, c.workspace, taskname, allowSetCommand=true)
 
-proc make(c: Config; args: seq[string]) =
-  var nimfile = "nakefile.nim"
-  var start = 0
-  if args.len >= 1 and args[0].contains(".nim"):
-    nimfile = args[0]
-  let exefile = changeFileExt(nimfile, ExeExt)
-  var cmd = if not exefile.fileExists or fileChanged(nimfile, c.workspace / recipesDirName):
-              "nim c -r"
-            else:
-              start = 1
-              exefile
-  for i in start..<args.len:
-    cmd.add ' '
-    cmd.add quoteShell(args[i])
-  exec cmd
-
 proc main(c: Config) =
   var action = ""
   var args: seq[string] = @[]
   var rest = ""
 
   template handleRest() =
-    if args.len == 1 and action in ["build", "put", "tinker", "run", "make"]:
+    if args.len == 1 and action in ["build", "run"]:
       rest = cmdLineRest(p)
       break
 
@@ -257,13 +230,6 @@ proc main(c: Config) =
   of "pinned":
     singlePkg()
     execRecipe c, getProject(c, args[0])
-  of "tinker":
-    if args.len == 0:
-      error action & " command takes one or more arguments"
-    if rest.len == 0:
-      tinkerPkg(c, getPackages(c), args[0])
-    else:
-      tinkerCmd(c, getPackages(c), args[0], rest)
   of "build":
     singlePkg()
     build c, getPackages(c), args[0], rest
@@ -272,25 +238,6 @@ proc main(c: Config) =
     listDeps c, args[0]
   of "path":
     for a in args: echoPath(c, a)
-  of "get":
-    if args.len > 1:
-      error action & " command takes one or zero names"
-    try:
-      echo getValue(c.workspace, if args.len == 1: args[0] else: "_")
-    except IOError:
-      echo ""
-  of "put":
-    writeKeyValPair(c.workspace, args[0], rest)
-  of "run":
-    let k = if args.len >= 1: args[0] else: "_"
-    try:
-      var v = getValue(c.workspace, k)
-      if rest.len > 0: v = v % rest
-      exec v
-    except IOError:
-      error "no variable found: " & k
-    except ValueError:
-      error "invalid $expansions: " & k & " " & rest
   of "task":
     if args.len == 2:
       runtask(c, args[0], args[1])
@@ -305,8 +252,6 @@ proc main(c: Config) =
       runtask(c, action, findNimbleFile())
     else:
       error "command '" & action & "' takes 0 or 1 arguments"
-  of "make":
-    make(c, args)
   else:
     # typing in 'nawabs' with no command currently raises an error so we're
     # free to later do something more convenient here

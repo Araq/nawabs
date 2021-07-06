@@ -54,7 +54,7 @@ proc callCompiler*(nimExe, args: string, path: seq[string]): Action =
   var tmpl = ""
   var x = newStringOfCap(120)
   result.file = ""
-  while outp.readLine(x.TaintedString) or running(p):
+  while outp.readLine(x) or running(p):
     result.file.add(x & "\n")
     if x =~ pegOfInterest:
       # `err` should contain the last error/warning message
